@@ -1,0 +1,13 @@
+log_play_event
+mtg-app-stats-version
+mtg-app-scryfall-batch-loader
+mtg-app-stats-summary
+mtg-app-sync-moxfield
+mtgAppProfile
+mtg-app-get-random-decks
+mtg-app-list-decks
+mtg-app-get-diff
+mtg-app-get-games
+mtg-app-build-commanders-index
+mtg-app-scryfall-batch-download
+mtg-app-deck-versions
