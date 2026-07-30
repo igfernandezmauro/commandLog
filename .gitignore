@@ -1,0 +1,2 @@
+#Production AWS inventory may contain secrets
+docs/inventory/raw
