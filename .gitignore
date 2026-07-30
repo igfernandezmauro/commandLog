@@ -1,2 +1,12 @@
-#Production AWS inventory may contain secrets
+# AWS inventory artifacts
 docs/inventory/raw
+
+# Downloaded Lambda packages
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
