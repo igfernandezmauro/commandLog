@@ -50,15 +50,25 @@ Builds a frontend commander search index. It queries Scryfall for cards legal as
 ## Current data flow
 
 User Profile
+    
     ↓
+    
 External Deck Source
+    
     ↓
+
 Current Deck State
+    
     ↓
+
 Deck Change History
+    
     ↓
+
 Play Events
+    
     ↓
+    
 Statistics and Recommendations
 
 ## Known technical debt
