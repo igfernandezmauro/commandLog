@@ -47,30 +47,6 @@ Loads the downloaded Scryfall bulk JSON from S3 into DynamoDB table `mtg_app_car
 # mtg-app-build-commanders-index
 Builds a frontend commander search index. It queries Scryfall for cards legal as commanders in Commander format, extracts normalized English names and face names, then uploads data/commanders_index.json to the frontend bucket.
 
-## Current data flow
-
-User Profile
-    
-    ↓
-    
-External Deck Source
-    
-    ↓
-
-Current Deck State
-    
-    ↓
-
-Deck Change History
-    
-    ↓
-
-Play Events
-    
-    ↓
-    
-Statistics and Recommendations
-
 ## Known technical debt
 
 1. Rename or generalize mtg-app-sync-moxfield.
