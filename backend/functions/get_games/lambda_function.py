@@ -1,95 +1,84 @@
 import os, json
-import boto3
+
 from boto3.dynamodb.conditions import Key
 
-aws_endpoint_url = os.environ.get("AWS_ENDPOINT_URL")
+from commandlog.auth import get_user_key
+from commandlog.aws import dynamodb_resource
+from commandlog.responses import json_response
 
-dynamodb_options = {
-    "region_name": os.getenv("AWS_REGION", "ca-central-1"),
-}
 
-if aws_endpoint_url:
-    dynamodb_options["endpoint_url"] = aws_endpoint_url
-
-ddb = boto3.resource("dynamodb", **dynamodb_options)
+ddb = dynamodb_resource()
 tbl = ddb.Table(os.environ["PLAY_EVENTS_TABLE"])
 
-def resp(status, obj):
-    return {
-        "statusCode": status,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "content-type,x-api-key",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-        },
-        "body": json.dumps(obj, default=str),
-    }
-
-def clamp_int(v, default, lo, hi):
+def clamp_int(value, default: int, minimum: int, maximum: int) -> int:
     try:
-        n = int(v)
-        if n < lo: return lo
-        if n > hi: return hi
-        return n
-    except Exception:
+        number = int(value)
+        if number < minimum:
+            return minimum
+        
+        if number > maximum:
+            return maximum
+        
+        return number
+    
+    except (TypeError, ValueError):
         return default
 
-def _claims_from_event(event: dict) -> dict:
-    rc = (event or {}).get("requestContext") or {}
-    jwt = (rc.get("authorizer") or {}).get("jwt") or {}
-    claims = jwt.get("claims")
-    if isinstance(claims, dict) and claims:
-        return claims
-    claims = (rc.get("authorizer") or {}).get("claims")
-    if isinstance(claims, dict) and claims:
-        return claims
-    return {}
-
-def get_user_key(event: dict) -> str:
-    sub = (_claims_from_event(event) or {}).get("sub")
-    if not sub:
-        raise PermissionError("Unauthorized: missing sub claim")
-    return f"user#{sub}"
-
 def lambda_handler(event, context):
-    user_key = get_user_key(event)
-    qs = event.get("queryStringParameters") or {}
+    try:
+        user_key = get_user_key(event)
+    except PermissionError as error:
+        return json_response(
+            401,
+            {"error": str(error)},
+        )
 
-    # limit=20 (default), clamp to keep it safe/cheap
-    limit = clamp_int(qs.get("limit"), default=20, lo=1, hi=200)
+    query_parameters = event.get("queryStringParameters") or {}
 
-    # optional: deck_id filter
-    deck_id = (qs.get("deck_id") or "").strip()
-
-    # optional: since=YYYY-MM-DD
-    since = (qs.get("since") or "").strip()
-
-    # Sort key is played_at (ISO string); Query can return newest first.
-    if since:
-        start = since + "T00:00:00Z"
-        key_cond = Key("user_key").eq(user_key) & Key("played_at").gte(start)
-    else:
-        key_cond = Key("user_key").eq(user_key)
-
-    q = tbl.query(
-        KeyConditionExpression=key_cond,
-        ScanIndexForward=False,  # newest first
-        Limit=limit * 3 if deck_id else limit  # overfetch a bit if filtering client-side
+    limit = clamp_int(
+        query_parameters.get("limit"),
+        default=20,
+        minimum=1,
+        maximum=200,
     )
 
-    items = q.get("Items", [])
+    deck_id = (
+        query_parameters.get("deck_id") or ""
+    ).strip()
 
-    # If deck_id filter, apply after query (simple, no GSI needed)
+    since = (
+        query_parameters.get("since") or ""
+    ).strip()
+
+    if since:
+        start = f"{since}T00:00:00Z"
+
+        key_condition = (
+            Key("user_key").eq(user_key)
+            & Key("played_at").gte(start)
+        )
+    else:
+        key_condition = Key("user_key").eq(user_key)
+
+    response = tbl.query(
+        KeyConditionExpression=key_condition,
+        ScanIndexForward=False,
+        Limit=limit * 3 if deck_id else limit,
+    )
+
+    items = response.get("Items", [])
+
     if deck_id:
-        items = [x for x in items if str(x.get("deck_id")) == deck_id][:limit]
+        items = [item for item in items if str(item.get("deck_id")) == deck_id][:limit]
 
-    # Return items (already newest first)
-    return resp(200, {
-        "user_key": user_key,
-        "count": len(items),
-        "limit": limit,
-        "deck_id": deck_id or None,
-        "since": since or None,
-        "games": items
-    })
+    return json_response(
+        200,
+        {
+            "user_key": user_key,
+            "count": len(items),
+            "limit": limit,
+            "deck_id": deck_id or None,
+            "since": since or None,
+            "games": items,
+        },
+    )
