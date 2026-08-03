@@ -1,0 +1,15 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /play",
+  "rawPath": "/play",
+  "requestContext": {
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "local-user"
+        }
+      }
+    }
+  },
+  "body": "{\"deck_id\":\"deck-does-not-exist\",\"result\":\"WIN\"}"
+}

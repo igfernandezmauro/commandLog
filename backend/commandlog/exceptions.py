@@ -14,7 +14,7 @@ class UnauthorizedError(CommandLogError):
 
 class ValidationError(CommandLogError):
     status_code = 400
-    error_code = "valiation_error"
+    error_code = "validation_error"
 
 class NotFoundError(CommandLogError):
     status_code = 404

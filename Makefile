@@ -1,7 +1,7 @@
 AWS_REGION := ca-central-1
 LOCALSTACK_ENDPOINT := http://localhost:4566
 
-.PHONY: local-up local-down local-status local-seed local-reset sam-build invoke-list-decks invoke-get-games invoke-get-games-alora invoke-list-decks-unauthorized invoke-get-games-unauthorized
+.PHONY: local-up local-down local-status local-seed local-reset sam-build invoke-list-decks invoke-get-games invoke-get-games-alora invoke-list-decks-unauthorized invoke-get-games-unauthorized invoke-log-play-event invoke-log-play-event-unauthorized invoke-log-play-event-missing-deck invoke-log-play-event-invalid
 
 local-up:
 	docker compose --env-file .env -f local/docker-compose.yml up -d
@@ -62,3 +62,23 @@ invoke-get-games-unauthorized: sam-build
 	sam local invoke GetGamesFunction \
 	--template-file .aws-sam/build/template.yaml \
 	--event backend/tests/events/get-games-unauthorized.json
+
+invoke-log-play-event: sam-build
+	sam local invoke LogPlayEventFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/log-play-event.json
+
+invoke-log-play-event-unauthorized: sam-build
+	sam local invoke LogPlayEventFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/log-play-event-unauthorized.json
+
+invoke-log-play-event-missing-deck: sam-build
+	sam local invoke LogPlayEventFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/log-play-event-missing-deck.json
+
+invoke-log-play-event-invalid: sam-build
+	sam local invoke LogPlayEventFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/log-play-event-invalid.json

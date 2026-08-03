@@ -1,0 +1,7 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /play",
+  "rawPath": "/play",
+  "requestContext": {},
+  "body": "{\"deck_id\":\"deck-alora\",\"result\":\"WIN\"}"
+}
