@@ -8,7 +8,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: commandlog-local-list-decks
-      CodeUri: ../backend/functions/mtg-app-list-decks/
+      CodeUri: ../backend/functions/list_decks/
       Handler: lambda_function.lambda_handler
       Runtime: python3.11
       Architectures:
@@ -27,7 +27,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: commandlog-local-get-games
-      CodeUri: ../backend/functions/mtg-app-get-games/
+      CodeUri: ../backend/functions/get_games/
       Handler: lambda_function.lambda_handler
       Runtime: python3.11
       Architectures:
