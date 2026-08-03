@@ -2,7 +2,16 @@ import os, json
 import boto3
 from boto3.dynamodb.conditions import Key
 
-ddb = boto3.resource("dynamodb")
+aws_endpoint_url = os.environ.get("AWS_ENDPOINT_URL")
+
+dynamodb_options = {
+    "region_name": os.getenv("AWS_REGION", "ca-central-1"),
+}
+
+if aws_endpoint_url:
+    dynamodb_options["endpoint_url"] = aws_endpoint_url
+
+ddb = boto3.resource("dynamodb", **dynamodb_options)
 tbl = ddb.Table(os.environ["PLAY_EVENTS_TABLE"])
 
 def resp(status, obj):

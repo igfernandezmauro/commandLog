@@ -22,3 +22,21 @@ Resources:
           AWS_REGION: ca-central-1
           STATE_TABLE: commandlog_local_deck_state
           USERS_TABLE: commandlog_local_user_profile
+
+  GetGamesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-get-games
+      CodeUri: ../backend/functions/mtg-app-get-games/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          APP_END: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          AWS_REGION: ca-central-1
+          PLAY_EVENTS_TABLE: commandlog_local_play_events

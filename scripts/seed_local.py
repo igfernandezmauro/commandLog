@@ -12,6 +12,7 @@ ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
 
 STATE_TABLE = "commandlog_local_deck_state"
 USERS_TABLE = "commandlog_local_user_profile"
+PLAY_EVENTS_TABLE = "commandlog_local_play_events"
 
 USER_KEY = "user#local-user"
 
@@ -87,6 +88,40 @@ def create_users_table(dynamodb: Any) -> None:
     table.wait_until_exists()
     print(f"Created table: {USERS_TABLE}")
 
+def create_play_events_table(dynamodb: Any) -> None:
+    if table_exists(dynamodb, PLAY_EVENTS_TABLE):
+        print(f"Table already exists: {PLAY_EVENTS_TABLE}")
+        return
+
+    table = dynamodb.create_table(
+        TableName=PLAY_EVENTS_TABLE,
+        KeySchema=[
+            {"AttributeName": "user_key", "KeyType": "HASH"},
+            {"AttributeName": "played_at", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "user_key", "AttributeType": "S"},
+            {"AttributeName": "played_at", "AttributeType": "S"},
+            {"AttributeName": "deck_id", "AttributeType": "S"},
+        ],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "gsi1.deck_id_played_at",
+                "KeySchema": [
+                    {"AttributeName": "deck_id", "KeyType": "HASH"},
+                    {"AttributeName": "played_at", "KeyType": "RANGE"},
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL"
+                },
+            }
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+    table.wait_until_exists()
+    print(f"Created table: {PLAY_EVENTS_TABLE}")
+
 def seed_profile(dynamodb: Any) -> None:
     table = dynamodb.Table(USERS_TABLE)
 
@@ -146,15 +181,65 @@ def seed_decks(dynamodb: Any) -> None:
 
     print(f"Seeded {len(decks)} local decks")
 
+def seed_games(dynamodb: Any) -> None:
+    table = dynamodb.Table(PLAY_EVENTS_TABLE)
+
+    games = [
+        {
+            "user_key": USER_KEY,
+            "played_at": "2026-08-01T22:00:00Z",
+            "deck_id": "deck-alora",
+            "deck_name": "Alora, Merry Thief",
+            "commander": "Alora, Merry Thief",
+            "result": "win",
+            "store": "Local Game Store",
+            "turn_order": 2,
+            "mulligans": 1,
+            "asof_list_hash": "local-alora-v2",
+        },
+        {
+            "user_key": USER_KEY,
+            "played_at": "2026-07-25T18:30:00Z",
+            "deck_id": "deck-kadena",
+            "deck_name": "Kadena Morph",
+            "commander": "Kadena, Slinking Sorcerer",
+            "result": "loss",
+            "store": "Home",
+            "turn_order": 4,
+            "mulligans": 0,
+            "asof_list_hash": "local-kadena-v1",
+        },
+        {
+            "user_key": USER_KEY,
+            "played_at": "2026-07-20T19:00:00Z",
+            "deck_id": "deck-alora",
+            "deck_name": "Alora, Merry Thief",
+            "commander": "Alora, Merry Thief",
+            "result": "loss",
+            "store": "Local Game Store",
+            "turn_order": 1,
+            "mulligans": 2,
+            "asof_list_hash": "local-alora-v1",
+        },
+    ]
+
+    with table.batch_writer() as batch:
+        for game in games:
+            batch.put_item(Item=game)
+
+    print(f"Seeded {len(games)} local games")
+
 def main() -> int:
     try:
         dynamodb = get_dynamodb()
 
         create_state_table(dynamodb)
         create_users_table(dynamodb)
+        create_play_events_table(dynamodb)
 
         seed_profile(dynamodb)
         seed_decks(dynamodb)
+        seed_games(dynamodb)
 
         print("Local CommandLog data is ready")
         return 0
