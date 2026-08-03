@@ -1,5 +1,7 @@
 from typing import Any
 
+from commandlog.exceptions import UnauthorizedError
+
 def claims_from_event(event: dict[str, Any] | None) -> dict[str, Any]:
     request_context = (event or {}).get("requestContext") or {}
     authorizer = request_context.get("authorizer") or {}
@@ -21,6 +23,6 @@ def get_user_key(event: dict[str, Any] | None) -> str:
     sub = claims_from_event(event).get("sub")
 
     if not sub:
-        raise PermissionError("Unauthorized: Missing sub claim")
+        raise UnauthorizedError("Unauthorized: missing sub claim")
 
     return f"user#{sub}"
