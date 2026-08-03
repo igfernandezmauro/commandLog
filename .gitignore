@@ -10,3 +10,10 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+local/env.json
+
+.env
+.venv/
+
+.aws-sam/

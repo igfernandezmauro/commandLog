@@ -2,9 +2,19 @@ import os, json, boto3
 from boto3.dynamodb.conditions import Key
 from decimal import Decimal
 
-ddb = boto3.resource("dynamodb")
+aws_endpoint_url = os.getenv("AWS_ENDPOINT_URL")
+
+dynamodb_options = {
+    "region_name": os.getenv("AWS_REGION", "ca-central-1"),
+}
+
+if aws_endpoint_url:
+    dynamodb_options["endpoint_url"] = aws_endpoint_url
+
+ddb = boto3.resource("dynamodb", **dynamodb_options)
+
 tbl_state = ddb.Table(os.environ["STATE_TABLE"])
-tbl_users = ddb.Table("mtg_app_user_profile")
+tbl_users = ddb.Table(os.environ["USERS_TABLE"])
 
 def _claims_from_event(event: dict) -> dict:
     rc = (event or {}).get("requestContext") or {}

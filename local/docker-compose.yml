@@ -1,0 +1,26 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: commandlog-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: dynamodb
+      PERSISTENCE: "1"
+      AWS_DEFAULT_REGION: ca-central-1
+      DEBUG: "0"
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN}
+    volumes:
+      - commandlog-localstack-data:/var/lib/localstack
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:4566/_localstack/health
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  commandlog-localstack-data:
