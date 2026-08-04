@@ -58,3 +58,37 @@ Resources:
           AWS_ENDPOINT_URL: http://host.docker.internal:4566
           PLAY_EVENTS_TABLE: commandlog_local_play_events
           STATE_TABLE: commandlog_local_deck_state
+
+  StatsSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-stats-summary
+      CodeUri: ../backend/
+      Handler: functions.stats_summary.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          PLAY_EVENTS_TABLE: commandlog_local_play_events
+
+  StatsVersionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-stats-version
+      CodeUri: ../backend/
+      Handler: functions.stats_version.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          PLAY_EVENTS_TABLE: commandlog_local_play_events
