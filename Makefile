@@ -1,7 +1,7 @@
 AWS_REGION := ca-central-1
 LOCALSTACK_ENDPOINT := http://localhost:4566
 
-.PHONY: local-up local-down local-status local-seed local-reset sam-build invoke-list-decks invoke-get-games invoke-get-games-alora invoke-list-decks-unauthorized invoke-get-games-unauthorized invoke-log-play-event invoke-log-play-event-unauthorized invoke-log-play-event-missing-deck invoke-log-play-event-invalid
+.PHONY: local-up local-down local-status local-seed local-reset sam-build invoke-list-decks invoke-get-games invoke-get-games-alora invoke-list-decks-unauthorized invoke-get-games-unauthorized invoke-log-play-event invoke-log-play-event-unauthorized invoke-log-play-event-missing-deck invoke-log-play-event-invalid invoke-stats-summary invoke-stats-summary-since invoke-stats-version invoke-stats-version-missing-deck
 
 local-up:
 	docker compose --env-file .env -f local/docker-compose.yml up -d
@@ -82,3 +82,23 @@ invoke-log-play-event-invalid: sam-build
 	sam local invoke LogPlayEventFunction \
 	--template-file .aws-sam/build/template.yaml \
 	--event backend/tests/events/log-play-event-invalid.json
+
+invoke-stats-summary: sam-build
+	sam local invoke StatsSummaryFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/stats-summary.json
+
+invoke-stats-summary-since: sam-build
+	sam local invoke StatsSummaryFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/stats-summary-since.json
+
+invoke-stats-version: sam-build
+	sam local invoke StatsVersionFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/stats-version.json
+
+invoke-stats-version-missing-deck: sam-build
+	sam local invoke StatsVersionFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/stats-version-missing-deck.json
