@@ -1,0 +1,17 @@
+{
+  "version": "2.0",
+  "routeKey": "GET /pick",
+  "rawPath": "/pick",
+  "queryStringParameters": {
+    "alpha": "not-a-number"
+  },
+  "requestContext": {
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "local-user"
+        }
+      }
+    }
+  }
+}

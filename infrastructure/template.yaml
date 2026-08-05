@@ -92,3 +92,40 @@ Resources:
           APP_ENV: local
           AWS_ENDPOINT_URL: http://host.docker.internal:4566
           PLAY_EVENTS_TABLE: commandlog_local_play_events
+
+  GetRandomDecksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-get-random-decks
+      CodeUri: ../backend/
+      Handler: functions.get_random_decks.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          STATE_TABLE: commandlog_local_deck_state
+          PLAY_EVENTS_TABLE: commandlog_local_play_events
+          USERS_TABLE: commandlog_local_user_profile
+
+  DeckVersionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-deck-versions
+      CodeUri: ../backend/
+      Handler: functions.deck_versions.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          CHANGE_LOG_TABLE: commandlog_local_deck_change_log
+          STATE_TABLE: commandlog_local_deck_state

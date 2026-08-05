@@ -34,7 +34,7 @@ Builds aggregate stats over the authenticated user’s play events. It computes 
 Builds stats for one deck broken down by deck version/list hash. It requires `deck_id`, scans that user’s play events, groups matching games by `asof_list_hash`, and reports games, wins/losses/draws, win rate, averages for turns/mulligans/missed land drops/feeling, plus first and last played dates.
 
 # mtg-app-get-random-decks
-Suggests random decks to play, weighted by heuristics. It loads the user’s active-source decks and play history, then gives more weight to decks played less often, decks not played recently, and decks updated since their last play. Supports count plus tuning parameters alpha, beta, gamma, and delta; delta is returned but currently not applied in the weighting logic.
+Suggests random decks to play, weighted by heuristics. It loads the user’s active-source decks and play history, then gives more weight to decks played less often, decks not played recently, and decks updated since their last play. Supports count plus tuning parameters alpha, beta, and gamma.
 
 ## Card data enrichment
 
@@ -53,7 +53,6 @@ Builds a frontend commander search index. It queries Scryfall for cards legal as
 1. Stop triggering import automatically from profile updates.
 1. Add an explicit manual import endpoint.
 1. Move the hardcoded user-profile table name into configuration.
-1. Apply or remove the unused delta recommendation parameter.
 1. Separate provider-specific parsing from sync orchestration.
 1. Extract shared authentication and response handling.
 1. Replace expensive DynamoDB scans where practical.

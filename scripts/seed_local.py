@@ -13,6 +13,7 @@ ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
 STATE_TABLE = "commandlog_local_deck_state"
 USERS_TABLE = "commandlog_local_user_profile"
 PLAY_EVENTS_TABLE = "commandlog_local_play_events"
+CHANGE_LOG_TABLE = "commandlog_local_deck_change_log"
 
 USER_KEY = "user#local-user"
 
@@ -122,6 +123,27 @@ def create_play_events_table(dynamodb: Any) -> None:
     table.wait_until_exists()
     print(f"Created table: {PLAY_EVENTS_TABLE}")
 
+def create_change_log_table(dynamodb: Any) -> None:
+    if table_exists(dynamodb, CHANGE_LOG_TABLE):
+        print(f"Table already exists: {CHANGE_LOG_TABLE}")
+        return
+
+    table = dynamodb.create_table(
+        TableName=CHANGE_LOG_TABLE,
+        KeySchema=[
+            {"AttributeName": "deck_id", "KeyType": "HASH"},
+            {"AttributeName": "changed_at", "KeyType": "RANGE"}
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "deck_id", "AttributeType": "S"},
+            {"AttributeName": "changed_at", "AttributeType": "S"}
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+    table.wait_until_exists()
+    print(f"Created table: {CHANGE_LOG_TABLE}")
+
 def seed_profile(dynamodb: Any) -> None:
     table = dynamodb.Table(USERS_TABLE)
 
@@ -229,6 +251,36 @@ def seed_games(dynamodb: Any) -> None:
 
     print(f"Seeded {len(games)} local games")
 
+def seed_deck_history(dynamodb: Any) -> None:
+    table = dynamodb.Table(CHANGE_LOG_TABLE)
+
+    records = [
+        {
+            "deck_id": "deck-alora",
+            "changed_at": "2026-06-01T12:00:00Z",
+            "change_type": "CREATED",
+            "list_hash": "local-alora-v1"
+        },
+        {
+            "deck_id": "deck-alora",
+            "changed_at": "2026-08-01T15:00:00Z",
+            "change_type": "UPDATED",
+            "list_hash": "local-alora-v2",
+        },
+        {
+            "deck_id": "deck-kadena",
+            "changed_at": "2026-06-15T12:00:00Z",
+            "change_type": "CREATED",
+            "list_hash": "local-kadena-v1"
+        }
+    ]
+
+    with table.batch_writer() as batch:
+        for record in records:
+            batch.put_item(Item=record)
+
+    print(f"Seeded {len(records)} deck history records")
+
 def main() -> int:
     try:
         dynamodb = get_dynamodb()
@@ -236,10 +288,12 @@ def main() -> int:
         create_state_table(dynamodb)
         create_users_table(dynamodb)
         create_play_events_table(dynamodb)
+        create_change_log_table(dynamodb)
 
         seed_profile(dynamodb)
         seed_decks(dynamodb)
         seed_games(dynamodb)
+        seed_deck_history(dynamodb)
 
         print("Local CommandLog data is ready")
         return 0
