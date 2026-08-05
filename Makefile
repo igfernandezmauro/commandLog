@@ -1,7 +1,7 @@
 AWS_REGION := ca-central-1
 LOCALSTACK_ENDPOINT := http://localhost:4566
 
-.PHONY: local-up local-down local-status local-seed local-reset sam-build invoke-list-decks invoke-get-games invoke-get-games-alora invoke-list-decks-unauthorized invoke-get-games-unauthorized invoke-log-play-event invoke-log-play-event-unauthorized invoke-log-play-event-missing-deck invoke-log-play-event-invalid invoke-stats-summary invoke-stats-summary-since invoke-stats-version invoke-stats-version-missing-deck
+.PHONY: local-up local-down local-status local-seed local-reset sam-build invoke-list-decks invoke-get-games invoke-get-games-alora invoke-list-decks-unauthorized invoke-get-games-unauthorized invoke-log-play-event invoke-log-play-event-unauthorized invoke-log-play-event-missing-deck invoke-log-play-event-invalid invoke-stats-summary invoke-stats-summary-since invoke-stats-version invoke-stats-version-missing-deck invoke-get-random-decks invoke-get-random-decks-invalid invoke-deck-versions invoke-deck-versions-not-found
 
 local-up:
 	docker compose --env-file .env -f local/docker-compose.yml up -d
@@ -102,3 +102,23 @@ invoke-stats-version-missing-deck: sam-build
 	sam local invoke StatsVersionFunction \
 	--template-file .aws-sam/build/template.yaml \
 	--event backend/tests/events/stats-version-missing-deck.json
+
+invoke-get-random-decks: sam-build
+	sam local invoke GetRandomDecksFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/get-random-decks.json
+
+invoke-get-random-decks-invalid: sam-build
+	sam local invoke GetRandomDecksFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/get-random-decks-invalid.json
+
+invoke-deck-versions: sam-build
+	sam local invoke DeckVersionsFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/deck-versions.json
+
+invoke-deck-versions-not-found: sam-build
+	sam local invoke DeckVersionsFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/deck-versions-not-found.json

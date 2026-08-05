@@ -22,3 +22,6 @@ def user_profile_table() -> Any:
 
 def play_events_table() -> Any:
     return table_from_environment("PLAY_EVENTS_TABLE")
+
+def deck_change_log_table() -> Any:
+    return table_from_environment("CHANGE_LOG_TABLE")
