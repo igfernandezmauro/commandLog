@@ -1,0 +1,15 @@
+{
+  "cards": [
+    {
+      "quantity": 1,
+      "categories": ["Creature"],
+      "card": {
+        "uid": "55555555-5555-5555-5555-555555555555",
+        "oracleCard": {
+          "uid": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+          "name": "Acidic Slime"
+        }
+      }
+    }
+  ]
+}

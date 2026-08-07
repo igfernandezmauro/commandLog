@@ -25,3 +25,12 @@ def play_events_table() -> Any:
 
 def deck_change_log_table() -> Any:
     return table_from_environment("CHANGE_LOG_TABLE")
+
+def deck_diff_table() -> Any:
+    return table_from_environment("DECK_DIFF_TABLE")
+
+def cards_dimension_table() -> Any:
+    return table_from_environment("CARDS_DIM_TABLE")
+
+def print_map_table() -> Any:
+    return table_from_environment("PRINT_MAP_TABLE")
