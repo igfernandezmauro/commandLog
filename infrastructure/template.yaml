@@ -129,3 +129,26 @@ Resources:
           AWS_ENDPOINT_URL: http://host.docker.internal:4566
           CHANGE_LOG_TABLE: commandlog_local_deck_change_log
           STATE_TABLE: commandlog_local_deck_state
+
+  GetDiffFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-get-diff
+      CodeUri: ../backend/
+      Handler: functions.get_diff.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 20
+      Environment:
+        Variables:
+          APP_ENV: local,
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          CHANGE_LOG_TABLE: commandlog_local_deck_change_log
+          DECK_DIFF_TABLE: commandlog_local_deck_diffs
+          STATE_TABLE: commandlog_local_deck_state
+          CARDS_DIM_TABLE: commandlog_local_cards_dim
+          SNAPSHOT_BUCKET: commandlog-local-snapshots
+          PRINT_MAP_TABLE: commandlog_local_scryfall_print_map
+          EXCLUDED_CATEGORIES: Sideboard,Maybeboard

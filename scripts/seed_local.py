@@ -7,6 +7,8 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
+from pathlib import Path
+
 REGION = os.getenv("AWS_REGION", "ca-central-1")
 ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
 
@@ -14,12 +16,29 @@ STATE_TABLE = "commandlog_local_deck_state"
 USERS_TABLE = "commandlog_local_user_profile"
 PLAY_EVENTS_TABLE = "commandlog_local_play_events"
 CHANGE_LOG_TABLE = "commandlog_local_deck_change_log"
+DIFF_TABLE = "commandlog_local_deck_diffs"
+CARDS_DIM_TABLE = "commandlog_local_cards_dim"
+PRINT_MAP_TABLE = "commandlog_local_scryfall_print_map"
+
+SNAPSHOT_BUCKET = "commandlog-local-snapshots"
 
 USER_KEY = "user#local-user"
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SNAPSHOT_FIXTURES = PROJECT_ROOT / "local" / "seed" / "snapshots"
 
 def get_dynamodb():
     return boto3.resource(
         "dynamodb",
+        region_name=REGION,
+        endpoint_url=ENDPOINT_URL,
+        aws_access_key_id="test",
+        aws_secret_access_key="test",
+    )
+
+def get_s3_client():
+    return boto3.client(
+        "s3",
         region_name=REGION,
         endpoint_url=ENDPOINT_URL,
         aws_access_key_id="test",
@@ -144,6 +163,78 @@ def create_change_log_table(dynamodb: Any) -> None:
     table.wait_until_exists()
     print(f"Created table: {CHANGE_LOG_TABLE}")
 
+def create_diff_table(dynamodb: Any) -> None:
+    if table_exists(dynamodb, DIFF_TABLE):
+        print(f"Table already existst: {DIFF_TABLE}")
+        return
+
+    table = dynamodb.create_table(
+        TableName=DIFF_TABLE,
+        KeySchema=[
+            {"AttributeName": "deck_id", "KeyType": "HASH"},
+            {"AttributeName": "diff_key", "KeyType": "RANGE"}
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "deck_id", "AttributeType": "S"},
+            {"AttributeName": "diff_key", "AttributeType": "S"}
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+    table.wait_until_exists()
+    print(f"Created table: {DIFF_TABLE}")
+
+def create_cards_dimension_table(dynamodb: Any) -> None:
+    if table_exists(dynamodb, CARDS_DIM_TABLE):
+        print(f"Table already exists: {CARDS_DIM_TABLE}")
+        return
+
+    table = dynamodb.create_table(
+        TableName=CARDS_DIM_TABLE,
+        KeySchema=[
+            {"AttributeName": "oracle_id", "KeyType": "HASH"}
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "oracle_id", "AttributeType": "S"}
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+    table.wait_until_exists()
+    print(f"Created table: {CARDS_DIM_TABLE}")
+
+def create_print_map_table(dynamodb: Any) -> None:
+    if table_exists(dynamodb, PRINT_MAP_TABLE):
+        print(f"Table already exists: {PRINT_MAP_TABLE}")
+        return
+
+    table = dynamodb.create_table(
+        TableName=PRINT_MAP_TABLE,
+        KeySchema=[
+            {"AttributeName": "scryfall_id", "KeyType": "HASH"}
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "scryfall_id", "AttributeType": "S"}
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+    table.wait_until_exists()
+    print(f"Created table: {PRINT_MAP_TABLE}")
+
+def create_snapshot_bucket(s3_client: Any) -> None:
+    try:
+        s3_client.head_bucket(Bucket=SNAPSHOT_BUCKET)
+        print(f"Bucket already exists: {SNAPSHOT_BUCKET}")
+    except ClientError:
+        s3_client.create_bucket(
+            Bucket=SNAPSHOT_BUCKET,
+            CreateBucketConfiguration={
+                "LocationConstraint": REGION,
+            },
+        )
+        print(f"Created bucket: {SNAPSHOT_BUCKET}")
+
 def seed_profile(dynamodb: Any) -> None:
     table = dynamodb.Table(USERS_TABLE)
 
@@ -259,13 +350,17 @@ def seed_deck_history(dynamodb: Any) -> None:
             "deck_id": "deck-alora",
             "changed_at": "2026-06-01T12:00:00Z",
             "change_type": "CREATED",
-            "list_hash": "local-alora-v1"
+            "source": "moxfield",
+            "list_hash": "local-alora-v1",
+            "s3_key": "moxfield/local/decks/deck-alora/snapshot-v1.json",
         },
         {
             "deck_id": "deck-alora",
             "changed_at": "2026-08-01T15:00:00Z",
             "change_type": "UPDATED",
+            "source": "moxfield",
             "list_hash": "local-alora-v2",
+            "s3_key": "moxfield/local/decks/deck-alora/snapshot-v2.json",
         },
         {
             "deck_id": "deck-kadena",
@@ -281,19 +376,69 @@ def seed_deck_history(dynamodb: Any) -> None:
 
     print(f"Seeded {len(records)} deck history records")
 
+def seed_cards_dimension(dynamodb: Any) -> None:
+    table = dynamodb.Table(CARDS_DIM_TABLE)
+
+    cards = [
+        {
+            "oracle_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "name": "Mulldrifter",
+            "image_small": "https://example.com/mulldrifter-small.jpg",
+            "image_normal": "https://example.com/mulldrifter-normal.jpg",
+        },
+        {
+            "oracle_id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+            "name": "Ninja of the Deep Hours",
+            "image_small": "https://example.com/ninja-small.jpg",
+            "image_normal": "https://example.com/ninja-normal.jpg",
+        },
+    ]
+
+    with table.batch_writer() as batch:
+        for card in cards:
+            batch.put_item(Item=card)
+
+    print(f"Seeded {len(cards)} card dimension records")
+
+def seed_snapshots(s3_client: Any) -> None:
+    snapshots = {
+        "moxfield/local/decks/deck-alora/snapshot-v1.json": SNAPSHOT_FIXTURES / "moxfield-alora-v1.json",
+        "moxfield/local/decks/deck-alora/snapshot-v2.json": SNAPSHOT_FIXTURES / "moxfield-alora-v2.json",
+        "archidekt/local/decks/deck-archidekt-example/snapshot-v1.json": SNAPSHOT_FIXTURES / "archidekt-test-v1.json",
+    }
+
+    for key, fixture_path in snapshots.items():
+        s3_client.put_object(
+            Bucket=SNAPSHOT_BUCKET,
+            Key=key,
+            Body=fixture_path.read_bytes(),
+            ContentType="application/json",
+        )
+
+    print(f"Seeded {len(snapshots)} snapshot objects")
+
 def main() -> int:
     try:
         dynamodb = get_dynamodb()
+        s3_client = get_s3_client()
 
         create_state_table(dynamodb)
         create_users_table(dynamodb)
         create_play_events_table(dynamodb)
         create_change_log_table(dynamodb)
+        create_diff_table(dynamodb)
+        create_cards_dimension_table(dynamodb)
+        create_print_map_table(dynamodb)
+
+        create_snapshot_bucket(s3_client)
 
         seed_profile(dynamodb)
         seed_decks(dynamodb)
         seed_games(dynamodb)
         seed_deck_history(dynamodb)
+        seed_cards_dimension(dynamodb)
+
+        seed_snapshots(s3_client)
 
         print("Local CommandLog data is ready")
         return 0

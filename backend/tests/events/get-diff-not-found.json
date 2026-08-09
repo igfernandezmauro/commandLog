@@ -1,0 +1,18 @@
+{
+  "version": "2.0",
+  "routeKey": "GET /decks/{deck_id}/diff",
+  "rawPath": "/decks/not-owned/diff",
+  "pathParameters": {
+    "deck_id": "not-owned"
+  },
+  "queryStringParameters": null,
+  "requestContext": {
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "local-user"
+        }
+      }
+    }
+  }
+}
