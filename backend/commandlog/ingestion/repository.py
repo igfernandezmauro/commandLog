@@ -61,7 +61,7 @@ def update_deck_state(
                 changed_at = :changed_at,
                 created_at = :created_at,
                 last_seen_at = :last_seen_at,
-                list_hast = :list_hash,
+                list_hash = :list_hash,
                 #main = :main,
                 raw_s3_key = :raw_s3_key
         """,

@@ -1,19 +1,48 @@
+import os
 import hashlib
 import json
 import urllib.parse
 from typing import Any
+from pathlib import Path
 
 from commandlog.integrations.http import get_json
 
 SOURCE = "archidekt"
 
 
-def list_deck(username: str) -> list[dict[str, Any]]:
-    encoded = urllib.parse.quote(username)
+def _fixture_directory() -> Path | None:
+    value = os.getenv("ARCHIDEKT_FIXTURE_DIR")
 
-    data = get_json(
-        f"https://archidekt.com/api/decks/v3/?ownerUsername={encoded}&deckFormat=3"
-    )
+    if not value:
+        return None
+
+    return Path(value)
+
+def _load_fixture(filename: str):
+    directory = _fixture_directory()
+
+    if not directory:
+        return None
+
+    path = directory / filename
+
+    if not path.exists():
+        raise RuntimeError(f"Archidekt fixture not found: {path}")
+
+    with path.open() as file:
+        return json.load(file)
+
+def list_decks(username: str) -> list[dict[str, Any]]:
+    fixture = _load_fixture("archidekt-deck-list.json")
+
+    if fixture is not None:
+        data = fixture
+    else:
+        encoded = urllib.parse.quote(username)
+
+        data = get_json(
+            f"https://archidekt.com/api/decks/v3/?ownerUsername={encoded}&deckFormat=3"
+        )
 
     if isinstance(data, list):
         return data
@@ -29,6 +58,11 @@ def get_deck_id(deck: dict[str, Any]) -> str:
     return str(deck.get("id") or "")
 
 def fetch_deck(deck_id: str) -> dict[str, Any]:
+    fixture = _load_fixture("archidekt-deck.json")
+
+    if fixture is not None:
+        return fixture
+
     return get_json(
         f"https://archidekt.com/api/decks/{deck_id}/"
     )

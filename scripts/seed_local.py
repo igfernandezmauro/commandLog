@@ -241,10 +241,11 @@ def seed_profile(dynamodb: Any) -> None:
     table.put_item(
         Item={
             "user_key": USER_KEY,
-            "ingestion_source": "moxfield",
+            "ingestion_source": "archidekt",
             "ingestion_enabled": True,
-            "ingestion_enabled_key": "enabled",
-            "moxfield_username": "local-commandlog-user",
+            "ingestion_enabled_key": "1",
+            "archidekt_username": "local-archidekt-user",
+            "moxfield_username": "",
         }
     )
 
