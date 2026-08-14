@@ -244,7 +244,7 @@ def seed_profile(dynamodb: Any) -> None:
             "ingestion_source": "archidekt",
             "ingestion_enabled": True,
             "ingestion_enabled_key": "1",
-            "archidekt_username": "local-archidekt-user",
+            "archidekt_username": "local-archidekt-user-outdated",
             "moxfield_username": "",
         }
     )
