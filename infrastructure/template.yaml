@@ -152,3 +152,44 @@ Resources:
           SNAPSHOT_BUCKET: commandlog-local-snapshots
           PRINT_MAP_TABLE: commandlog_local_scryfall_print_map
           EXCLUDED_CATEGORIES: Sideboard,Maybeboard
+
+  SyncDecksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-sync-decks
+      CodeUri: ../backend/
+      Handler: functions.sync_decks.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 512
+      Timeout: 120
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          STATE_TABLE: commandlog_local_deck_state
+          CHANGE_LOG_TABLE: commandlog_local_deck_change_log
+          USERS_TABLE: commandlog_local_user_profile
+          BUCKET_NAME: commandlog-local-snapshots
+          DRY_RUN: "false"
+          ARCHIDEKT_FIXTURE_DIR: /var/task/tests/fixtures/archidekt
+
+  ProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-profile
+      CodeUri: ../backend/
+      Handler: functions.profile.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          USERS_TABLE: commandlog_local_user_profile
+          INGEST_LAMBDA_NAME: commandlog-local-sync-decks
+          INVOKE_INGEST_ON_SAVE: "false"

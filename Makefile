@@ -1,7 +1,18 @@
 AWS_REGION := ca-central-1
 LOCALSTACK_ENDPOINT := http://localhost:4566
 
-.PHONY: local-up local-down local-status local-seed local-reset sam-build invoke-list-decks invoke-get-games invoke-get-games-alora invoke-list-decks-unauthorized invoke-get-games-unauthorized invoke-log-play-event invoke-log-play-event-unauthorized invoke-log-play-event-missing-deck invoke-log-play-event-invalid invoke-stats-summary invoke-stats-summary-since invoke-stats-version invoke-stats-version-missing-deck invoke-get-random-decks invoke-get-random-decks-invalid invoke-deck-versions invoke-deck-versions-not-found invoke-get-diff invoke-get-diff-empty invoke-get-diff-not-found
+.PHONY: local-up local-down local-status local-seed local-reset \
+		sam-build \
+		invoke-list-decks invoke-list-decks-unauthorized \
+		invoke-get-games invoke-get-games-alora invoke-get-games-unauthorized \
+		invoke-log-play-event invoke-log-play-event-unauthorized invoke-log-play-event-missing-deck invoke-log-play-event-invalid \
+		invoke-stats-summary invoke-stats-summary-since \
+		invoke-stats-version invoke-stats-version-missing-deck \
+		invoke-get-random-decks invoke-get-random-decks-invalid \
+		invoke-deck-versions invoke-deck-versions-not-found \
+		invoke-get-diff invoke-get-diff-empty invoke-get-diff-not-found \
+		invoke-sync-decks invoke-sync-decks-all \
+		invoke-profile-get invoke-profile-get-no-jwt invoke-profile-put invoke-profile-put-unsupported-source invoke-profile-put-no-username
 
 local-up:
 	docker compose --env-file .env -f local/docker-compose.yml up -d
@@ -137,3 +148,38 @@ invoke-get-diff-not-found: sam-build
 	sam local invoke GetDiffFunction \
 	--template-file .aws-sam/build/template.yaml \
 	--event backend/tests/events/get-diff-not-found.json
+
+invoke-sync-decks: sam-build
+	sam local invoke SyncDecksFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/sync-decks.json
+
+invoke-sync-decks-all: sam-build
+	sam local invoke SyncDecksFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/sync-decks-all.json
+
+invoke-profile-get: sam-build
+	sam local invoke ProfileFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/profile-get.json
+
+invoke-profile-get-no-jwt: sam-build
+	sam local invoke ProfileFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/profile-get-no-jwt.json
+
+invoke-profile-put: sam-build
+	sam local invoke ProfileFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/profile-put.json
+
+invoke-profile-put-unsupported-source: sam-build
+	sam local invoke ProfileFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/profile-put-unsupported-source.json
+
+invoke-profile-put-no-username: sam-build
+	sam local invoke ProfileFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/profile-put-no-username.json

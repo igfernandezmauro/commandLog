@@ -1,0 +1,17 @@
+{
+  "version": "2.0",
+  "routeKey": "GET /me/profile",
+  "rawPath": "/me/profile",
+  "requestContext": {
+    "http": {
+      "method": "GET"
+    },
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "local-user"
+        }
+      }
+    }
+  }
+}
