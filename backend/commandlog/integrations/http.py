@@ -9,11 +9,17 @@ USER_AGENT = (
     "CommandLog/1.0 (personal project; contact: i.fernandezmauro@gmail.com)"
 )
 
+DEFAULT_ACCEPT = "application/json"
+
 
 def get_json(url: str, *, timeout: int = 20, retries: int = 4) -> Any:
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": USER_AGENT},
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": DEFAULT_ACCEPT
+        },
+        method="GET"
     )
 
     last_error = None
@@ -27,6 +33,7 @@ def get_json(url: str, *, timeout: int = 20, retries: int = 4) -> Any:
                 return json.loads(
                     response.read().decode("utf-8")
                 )
+
         except HTTPError as error:
             last_error = f"HTTP {error.code}"
 
@@ -43,4 +50,17 @@ def get_json(url: str, *, timeout: int = 20, retries: int = 4) -> Any:
     raise RuntimeError(
         f"GET failed after retries: {url} ({last_error})"
     )
-    
+
+def open_stream(url: str, *, timeout: int = 300, accept: str = "application/json;q=0.9;*/*;q=0.8"):
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": accept
+        }
+    )
+
+    return urllib.request.urlopen(
+        request,
+        timeout=timeout
+    )

@@ -12,7 +12,9 @@ LOCALSTACK_ENDPOINT := http://localhost:4566
 		invoke-deck-versions invoke-deck-versions-not-found \
 		invoke-get-diff invoke-get-diff-empty invoke-get-diff-not-found \
 		invoke-sync-decks invoke-sync-decks-all \
-		invoke-profile-get invoke-profile-get-no-jwt invoke-profile-put invoke-profile-put-unsupported-source invoke-profile-put-no-username
+		invoke-profile-get invoke-profile-get-no-jwt invoke-profile-put invoke-profile-put-unsupported-source invoke-profile-put-no-username \
+		invoke-scryfall-load invoke-scryfall-download \
+		invoke-build-commanders-index
 
 local-up:
 	docker compose --env-file .env -f local/docker-compose.yml up -d
@@ -183,3 +185,18 @@ invoke-profile-put-no-username: sam-build
 	sam local invoke ProfileFunction \
 	--template-file .aws-sam/build/template.yaml \
 	--event backend/tests/events/profile-put-no-username.json
+
+invoke-scryfall-load: sam-build
+	sam local invoke ScryfallLoadFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/scryfall-load.json
+
+invoke-scryfall-download: sam-build
+	sam local invoke ScryfallDownloadFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/scryfall-download.json
+
+invoke-build-commanders-index: sam-build
+	sam local invoke BuildCommandersIndexFunction \
+	--template-file .aws-sam/build/template.yaml \
+	--event backend/tests/events/build-commanders-index.json

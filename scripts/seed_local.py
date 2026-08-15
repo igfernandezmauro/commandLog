@@ -21,11 +21,14 @@ CARDS_DIM_TABLE = "commandlog_local_cards_dim"
 PRINT_MAP_TABLE = "commandlog_local_scryfall_print_map"
 
 SNAPSHOT_BUCKET = "commandlog-local-snapshots"
+FRONTEND_BUCKET = "commandlog-local-frontend"
 
 USER_KEY = "user#local-user"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT_FIXTURES = PROJECT_ROOT / "local" / "seed" / "snapshots"
+
+SCRYFALL_LOCAL_KEY = "scryfall/oracle_cards/latest.jsonl.gz"
 
 def get_dynamodb():
     return boto3.resource(
@@ -235,6 +238,19 @@ def create_snapshot_bucket(s3_client: Any) -> None:
         )
         print(f"Created bucket: {SNAPSHOT_BUCKET}")
 
+def create_frontend_bucket(s3_client: Any) -> None:
+    try:
+        s3_client.head_bucket(Bucket=FRONTEND_BUCKET)
+        print(f"Bucket already exists: {FRONTEND_BUCKET}")
+    except ClientError:
+        s3_client.create_bucket(
+            Bucket=FRONTEND_BUCKET,
+            CreateBucketConfiguration={
+                "LocationConstraint": REGION,
+            },
+        )
+        print(f"Created bucket: {FRONTEND_BUCKET}")
+
 def seed_profile(dynamodb: Any) -> None:
     table = dynamodb.Table(USERS_TABLE)
 
@@ -418,6 +434,25 @@ def seed_snapshots(s3_client: Any) -> None:
 
     print(f"Seeded {len(snapshots)} snapshot objects")
 
+def seed_scryfall_fixture(s3_client: Any) -> None:
+    fixture = (
+        PROJECT_ROOT
+        / "backend"
+        / "tests"
+        / "fixtures"
+        / "scryfall"
+        / "oracle-cards.jsonl.gz"
+    )
+
+    s3_client.put_object(
+        Bucket=SNAPSHOT_BUCKET,
+        Key=SCRYFALL_LOCAL_KEY,
+        Body=fixture.read_bytes(),
+        ContentType="application/gzip"
+    )
+
+    print(f"Seeded Scryfall fixture: {SCRYFALL_LOCAL_KEY}")
+
 def main() -> int:
     try:
         dynamodb = get_dynamodb()
@@ -432,6 +467,7 @@ def main() -> int:
         create_print_map_table(dynamodb)
 
         create_snapshot_bucket(s3_client)
+        create_frontend_bucket(s3_client)
 
         seed_profile(dynamodb)
         seed_decks(dynamodb)
@@ -440,6 +476,7 @@ def main() -> int:
         seed_cards_dimension(dynamodb)
 
         seed_snapshots(s3_client)
+        seed_scryfall_fixture(s3_client)
 
         print("Local CommandLog data is ready")
         return 0
