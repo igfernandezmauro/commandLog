@@ -193,3 +193,59 @@ Resources:
           USERS_TABLE: commandlog_local_user_profile
           INGEST_LAMBDA_NAME: commandlog-local-sync-decks
           INVOKE_INGEST_ON_SAVE: "false"
+
+  ScryfallLoadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-scryfall-load
+      CodeUri: ../backend/
+      Handler: functions.scryfall_load.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 1024
+      Timeout: 600
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          RAW_BUCKET: commandlog-local-snapshots
+          S3_KEY: scryfall/oracle_cards/latest.jsonl.gz
+          CARDS_DIM_TABLE: commandlog_local_cards_dim
+          WRITE_BATCH_SIZE: "2000"
+
+  ScryfallDownloadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-scrylfall-download
+      CodeUri: ../backend/
+      Handler: functions.scryfall_download.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 1024
+      Timeout: 120
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          RAW_BUCKET: commandlog-local-snapshots
+          S3_PREFIX: scryfall/oracle_cards
+
+  BuildCommandersIndexFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: commandlog-local-build-commanders-index
+      CodeUri: ../backend/
+      Handler: functions.build_commanders_index.lambda_function.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      MemorySize: 3008
+      Timeout: 900
+      Environment:
+        Variables:
+          APP_ENV: local
+          AWS_ENDPOINT_URL: http://host.docker.internal:4566
+          FRONTEND_BUCKET: commandlog-local-frontend
+          COMMANDERS_INDEX_KEY: data/commanders_index.json
