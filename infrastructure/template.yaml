@@ -3,249 +3,234 @@ Transform: AWS::Serverless-2016-10-31
 
 Description: CommandLog local development foundation
 
+Parameters:
+  AppEnvironment:
+    Type: String
+    Default: local
+    AllowedValues:
+      - local
+      - dev
+      - prod
+
+  DeckStateTableName:
+    Type: String
+    Default: commandlog_local_deck_state
+
+  PlayEventsTableName:
+    Type: String
+    Default: commandlog_local_play_events
+
+  UserProfileTableName:
+    Type: String
+    Default: commandlog_local_user_profile
+
+  DeckChangeLogTableName:
+    Type: String
+    Default: commandlog_local_deck_change_log
+
+  DeckDiffTableName:
+    Type: String
+    Default: commandlog_local_deck_diffs
+
+  CardsDimTableName:
+    Type: String
+    Default: commandlog_local_cards_dim
+
+  SnapshotBucketName:
+    Type: String
+    Default: commandlog-local-snapshots
+
+  RawBucketName:
+    Type: String
+    Default: commandlog-local-snapshots
+
+  FrontendBucketName:
+    Type: String
+    Default: commandlog-local-frontend
+
+  AwsEndpointUrl:
+    Type: String
+    Default: ""
+
+  ArchidektFixtureDir:
+    Type: String
+    Default: ""
+
+  InvokeIngestOnSave:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+
+Globals:
+  Function:
+    CodeUri: ../backend/
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        APP_ENV: !Ref AppEnvironment
+        AWS_ENDPOINT_URL: !Ref AwsEndpointUrl
+
 Resources:
   ListDecksFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-list-decks
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-list-decks
       Handler: functions.list_decks.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 3
       Environment:
         Variables:
-          APP_END: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          AWS_REGION: ca-central-1
-          STATE_TABLE: commandlog_local_deck_state
-          USERS_TABLE: commandlog_local_user_profile
+          STATE_TABLE: !Ref DeckStateTableName
+          USERS_TABLE: !Ref UserProfileTableName
 
   GetGamesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-get-games
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-get-games
       Handler: functions.get_games.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 3
       Environment:
         Variables:
-          APP_END: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          AWS_REGION: ca-central-1
-          PLAY_EVENTS_TABLE: commandlog_local_play_events
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
 
   LogPlayEventFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-log-play-event
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-log-play-event
       Handler: functions.log_play_event.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 3
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          PLAY_EVENTS_TABLE: commandlog_local_play_events
-          STATE_TABLE: commandlog_local_deck_state
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+          STATE_TABLE: !Ref DeckStateTableName
 
   StatsSummaryFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-stats-summary
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-stats-summary
       Handler: functions.stats_summary.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 3
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          PLAY_EVENTS_TABLE: commandlog_local_play_events
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
 
   StatsVersionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-stats-version
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-stats-version
       Handler: functions.stats_version.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 3
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          PLAY_EVENTS_TABLE: commandlog_local_play_events
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
 
   GetRandomDecksFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-get-random-decks
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-get-random-decks
       Handler: functions.get_random_decks.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 3
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          STATE_TABLE: commandlog_local_deck_state
-          PLAY_EVENTS_TABLE: commandlog_local_play_events
-          USERS_TABLE: commandlog_local_user_profile
+          STATE_TABLE: !Ref DeckStateTableName
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+          USERS_TABLE: !Ref UserProfileTableName
 
   DeckVersionsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-deck-versions
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-deck-versions
       Handler: functions.deck_versions.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 3
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          CHANGE_LOG_TABLE: commandlog_local_deck_change_log
-          STATE_TABLE: commandlog_local_deck_state
+          CHANGE_LOG_TABLE: !Ref DeckChangeLogTableName
+          STATE_TABLE: !Ref DeckStateTableName
 
   GetDiffFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-get-diff
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-get-diff
       Handler: functions.get_diff.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 20
       Environment:
         Variables:
-          APP_ENV: local,
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          CHANGE_LOG_TABLE: commandlog_local_deck_change_log
-          DECK_DIFF_TABLE: commandlog_local_deck_diffs
-          STATE_TABLE: commandlog_local_deck_state
-          CARDS_DIM_TABLE: commandlog_local_cards_dim
-          SNAPSHOT_BUCKET: commandlog-local-snapshots
-          PRINT_MAP_TABLE: commandlog_local_scryfall_print_map
-          EXCLUDED_CATEGORIES: Sideboard,Maybeboard
+          CHANGE_LOG_TABLE: !Ref DeckChangeLogTableName
+          DECK_DIFF_TABLE: !Ref DeckDiffTableName
+          STATE_TABLE: !Ref DeckStateTableName
+          CARDS_DIM_TABLE: !Ref CardsDimTableName
+          SNAPSHOT_BUCKET: !Ref SnapshotBucketName
 
   SyncDecksFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-sync-decks
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-sync-decks
       Handler: functions.sync_decks.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 512
       Timeout: 120
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          STATE_TABLE: commandlog_local_deck_state
-          CHANGE_LOG_TABLE: commandlog_local_deck_change_log
-          USERS_TABLE: commandlog_local_user_profile
-          BUCKET_NAME: commandlog-local-snapshots
-          DRY_RUN: "false"
-          ARCHIDEKT_FIXTURE_DIR: /var/task/tests/fixtures/archidekt
+          STATE_TABLE: !Ref DeckStateTableName
+          CHANGE_LOG_TABLE: !Ref DeckChangeLogTableName
+          USERS_TABLE: !Ref UserProfileTableName
+          BUCKET_NAME: !Ref SnapshotBucketName
+          ARCHIDEKT_FIXTURE_DIR: !Ref ArchidektFixtureDir
 
   ProfileFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-profile
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-profile
       Handler: functions.profile.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 128
       Timeout: 3
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          USERS_TABLE: commandlog_local_user_profile
-          INGEST_LAMBDA_NAME: commandlog-local-sync-decks
-          INVOKE_INGEST_ON_SAVE: "false"
+          USERS_TABLE: !Ref UserProfileTableName
+          INGEST_LAMBDA_NAME: !Ref SyncDecksFunction
+          INVOKE_INGEST_ON_SAVE: !Ref InvokeIngestOnSave
 
   ScryfallLoadFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-scryfall-load
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-scryfall-load
       Handler: functions.scryfall_load.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 1024
       Timeout: 600
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          RAW_BUCKET: commandlog-local-snapshots
-          S3_KEY: scryfall/oracle_cards/latest.jsonl.gz
-          CARDS_DIM_TABLE: commandlog_local_cards_dim
-          WRITE_BATCH_SIZE: "2000"
+          RAW_BUCKET: !Ref SnapshotBucketName
+          CARDS_DIM_TABLE: !Ref CardsDimTableName
 
   ScryfallDownloadFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-scrylfall-download
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-scryfall-download
       Handler: functions.scryfall_download.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 1024
       Timeout: 120
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          RAW_BUCKET: commandlog-local-snapshots
-          S3_PREFIX: scryfall/oracle_cards
+          RAW_BUCKET: !Ref SnapshotBucketName
 
   BuildCommandersIndexFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: commandlog-local-build-commanders-index
-      CodeUri: ../backend/
+      FunctionName: !Sub commandlog-${AppEnvironment}-build-commanders-index
       Handler: functions.build_commanders_index.lambda_function.lambda_handler
-      Runtime: python3.11
-      Architectures:
-        - x86_64
       MemorySize: 3008
       Timeout: 900
       Environment:
         Variables:
-          APP_ENV: local
-          AWS_ENDPOINT_URL: http://host.docker.internal:4566
-          FRONTEND_BUCKET: commandlog-local-frontend
+          FRONTEND_BUCKET: !Ref FrontendBucketName
           COMMANDERS_INDEX_KEY: data/commanders_index.json
