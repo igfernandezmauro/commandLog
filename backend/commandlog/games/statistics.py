@@ -161,7 +161,7 @@ def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: 
         "turns": 0,
         "mulls": 0,
         "mld": 0,
-        "feel": 0,
+        "feeling": 0,
         "first_played": None,
         "last_played": None,
     }
@@ -259,7 +259,7 @@ def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: 
     total["avg_turns"] = safe_rate(total["turns"], total_games)
     total["avg_mulligans"] = safe_rate(total["mulls"], total_games)
     total["avg_mld"] = safe_rate(total["mld"], total_games)
-    total["avg_feeling"] = safe_rate(total["feel"], total_games)
+    total["avg_feeling"] = safe_rate(total["feeling"], total_games)
 
     version_rows.sort(key=lambda row: row.get("last_played_at") or "", reverse=True)
 
