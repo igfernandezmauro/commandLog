@@ -108,46 +108,46 @@ def build_summary(games: list[dict[str, Any]], *, user_key: str, since: str | No
         if played_at and (deck_id not in last_played or played_at > last_played[deck_id]):
             last_played[deck_id] = played_at
 
-        for bucket in mulligan_stats.values():
-            bucket["win_rate"] = safe_rate(bucket["wins"], bucket["games"], empty_value=0)
+    for bucket in mulligan_stats.values():
+        bucket["win_rate"] = safe_rate(bucket["wins"], bucket["games"], empty_value=0)
 
-        for bucket in turn_order.values():
-            bucket["win_rate"] = safe_rate(bucket["wins"], bucket["games"], empty_value=0)
+    for bucket in turn_order.values():
+        bucket["win_rate"] = safe_rate(bucket["wins"], bucket["games"], empty_value=0)
 
-        deck_rows = list(by_deck.values())
+    deck_rows = list(by_deck.values())
 
-        for deck in deck_rows:
-            deck["win_rate"] = safe_rate(deck["wins"], deck["games"])
-            deck["last_played_at"] = last_played.get(deck["deck_id"])
+    for deck in deck_rows:
+        deck["win_rate"] = safe_rate(deck["wins"], deck["games"])
+        deck["last_played_at"] = last_played.get(deck["deck_id"])
 
-        deck_rows.sort(
-            key=lambda deck: (
-                -deck["games"],
-                -(deck["win_rate"] or 0),
-                deck.get("deck_name") or "",
-            )
+    deck_rows.sort(
+        key=lambda deck: (
+            -deck["games"],
+            -(deck["win_rate"] or 0),
+            deck.get("deck_name") or "",
         )
+    )
 
-        store_rows = [
-            {"store": store, "games": count}
-            for store, count in by_store.items()
-        ]
-        store_rows.sort(key=lambda row: -row["games"])
+    store_rows = [
+        {"store": store, "games": count}
+        for store, count in by_store.items()
+    ]
+    store_rows.sort(key=lambda row: -row["games"])
 
-        return {
-            "user_key": user_key,
-            "total_games": total,
-            "wins": wins,
-            "losses": losses,
-            "draws": draws,
-            "win_rate": safe_rate(wins, total),
-            "mulligans": mulligan_stats,
-            "avg_mulligans": safe_rate(mulligan_sum, mulligan_count),
-            "turn_order": turn_order,
-            "by_deck": deck_rows,
-            "by_store": store_rows,
-            "since": since,
-        }
+    return {
+        "user_key": user_key,
+        "total_games": total,
+        "wins": wins,
+        "losses": losses,
+        "draws": draws,
+        "win_rate": safe_rate(wins, total),
+        "mulligans": mulligan_stats,
+        "avg_mulligans": safe_rate(mulligan_sum, mulligan_count),
+        "turn_order": turn_order,
+        "by_deck": deck_rows,
+        "by_store": store_rows,
+        "since": since,
+    }
 
 def add_optional_metric(target: dict, key: str, value: int | None) -> None:
     if value is None:
