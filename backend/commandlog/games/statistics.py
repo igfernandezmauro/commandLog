@@ -149,6 +149,13 @@ def build_summary(games: list[dict[str, Any]], *, user_key: str, since: str | No
             "since": since,
         }
 
+def add_optional_metric(target: dict, key: str, value: int | None) -> None:
+    if value is None:
+        return
+
+    target[key] += value
+    target[f"{key}_count"] += 1
+
 def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: str) -> dict[str, Any]:
     by_version: dict[str, dict[str, Any]] = {}
     deck_name = deck_id
@@ -159,7 +166,7 @@ def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: 
         "losses": 0,
         "draws": 0,
         "turns": 0,
-        "mulls": 0,
+        "mulligans": 0,
         "mld": 0,
         "feeling": 0,
         "first_played": None,
@@ -211,9 +218,8 @@ def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: 
 
         mulligans = as_int(game.get("mulligans"))
 
-        if mulligans is not None:
-            stats["mulligans"] += mulligans
-            total["mulls"] += mulligans
+        add_optional_metric(stats, "mulligans", mulligans)
+        add_optional_metric(total, "mulligans", mulligans)
 
         played_at = game.get("played_at")
 
@@ -230,17 +236,18 @@ def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: 
         metrics = game.get("metrics")
 
         if isinstance(metrics, dict):
-            turns = as_int(metrics.get("turns")) or 0
-            missed_land_drops = as_int(metrics.get("missed_land_drops")) or 0
-            feeling = as_int(metrics.get("feeling")) or 0
+            turns = as_int(metrics.get("turns"))
+            mld = as_int(metrics.get("missed_land_drops"))
+            feeling = as_int(metrics.get("feeling"))
 
-            stats["turns"] += turns
-            stats["mld"] += missed_land_drops
-            stats["feeling"] += feeling
+            add_optional_metric(stats, "turns", turns)
+            add_optional_metric(total, "turns", turns)
 
-            total["turns"] += turns
-            total["mld"] += missed_land_drops
-            total["feeling"] += feeling
+            add_optional_metric(stats, "mld", mld)
+            add_optional_metric(total, "mld", mld)
+
+            add_optional_metric(stats, "feeling", feeling)
+            add_optional_metric(total, "feeling", feeling)
 
     version_rows = list(by_version.values())
 
@@ -248,18 +255,18 @@ def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: 
         games_count = stats["games"]
 
         stats["win_rate"] = safe_rate(stats["wins"], games_count)
-        stats["avg_turns"] = safe_rate(stats["turns"], games_count)
-        stats["avg_mulligans"] = safe_rate(stats["mulligans"], games_count)
-        stats["avg_mld"] = safe_rate(stats["mld"], games_count)
-        stats["avg_feeling"] = safe_rate(stats["feeling"], games_count)
+        stats["avg_turns"] = safe_rate(stats["turns"], stats["turns_count"])
+        stats["avg_mulligans"] = safe_rate(stats["mulligans"], stats["mulligans_count"])
+        stats["avg_mld"] = safe_rate(stats["mld"], stats["mld_count"])
+        stats["avg_feeling"] = safe_rate(stats["feeling"], stats["feeling_count"])
 
     total_games = total["games"]
 
     total["win_rate"] = safe_rate(total["wins"], total_games)
-    total["avg_turns"] = safe_rate(total["turns"], total_games)
-    total["avg_mulligans"] = safe_rate(total["mulls"], total_games)
-    total["avg_mld"] = safe_rate(total["mld"], total_games)
-    total["avg_feeling"] = safe_rate(total["feeling"], total_games)
+    total["avg_turns"] = safe_rate(total["turns"], total["turns_count"])
+    total["avg_mulligans"] = safe_rate(total["mulligans"], total["mulligans_count"])
+    total["avg_mld"] = safe_rate(total["mld"], total["mld_count"])
+    total["avg_feeling"] = safe_rate(total["feeling"], total["feeling_count"])
 
     version_rows.sort(key=lambda row: row.get("last_played_at") or "", reverse=True)
 
