@@ -1,5 +1,7 @@
 AWS_REGION := ca-central-1
 LOCALSTACK_ENDPOINT := http://localhost:4566
+SAM_LOCAL_TEMPLATE := .aws-sam/build/template.yaml
+SAM_LOCAL_ENV := backend/tests/env.local.json
 
 .PHONY: local-up local-down local-status local-seed local-reset \
 		sam-build \
@@ -54,149 +56,179 @@ sam-build:
 invoke-list-decks: sam-build
 	sam local invoke ListDecksFunction \
 		--template-file .aws-sam/build/template.yaml \
-		--event backend/tests/events/list-decks.json
+		--event backend/tests/events/list-decks.json \
+		--env-vars $(SAM_LOCAL_ENV)
 
 invoke-get-games: sam-build
 	sam local invoke GetGamesFunction \
 		--template-file .aws-sam/build/template.yaml \
-		--event backend/tests/events/get-games.json
+		--event backend/tests/events/get-games.json \
+		--env-vars $(SAM_LOCAL_ENV)
 
 invoke-get-games-alora: sam-build
 	sam local invoke GetGamesFunction \
 		--template-file .aws-sam/build/template.yaml \
-		--event backend/tests/events/get-games-alora.json
+		--event backend/tests/events/get-games-alora.json \
+		--env-vars $(SAM_LOCAL_ENV)
 
 invoke-list-decks-unauthorized: sam-build
 	sam local invoke ListDecksFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/list-decks-unauthorized.json
+	--event backend/tests/events/list-decks-unauthorized.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-get-games-unauthorized: sam-build
 	sam local invoke GetGamesFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/get-games-unauthorized.json
+	--event backend/tests/events/get-games-unauthorized.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-log-play-event: sam-build
 	sam local invoke LogPlayEventFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/log-play-event.json
+	--event backend/tests/events/log-play-event.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-log-play-event-unauthorized: sam-build
 	sam local invoke LogPlayEventFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/log-play-event-unauthorized.json
+	--event backend/tests/events/log-play-event-unauthorized.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-log-play-event-missing-deck: sam-build
 	sam local invoke LogPlayEventFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/log-play-event-missing-deck.json
+	--event backend/tests/events/log-play-event-missing-deck.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-log-play-event-invalid: sam-build
 	sam local invoke LogPlayEventFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/log-play-event-invalid.json
+	--event backend/tests/events/log-play-event-invalid.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-stats-summary: sam-build
 	sam local invoke StatsSummaryFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/stats-summary.json
+	--event backend/tests/events/stats-summary.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-stats-summary-since: sam-build
 	sam local invoke StatsSummaryFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/stats-summary-since.json
+	--event backend/tests/events/stats-summary-since.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-stats-version: sam-build
 	sam local invoke StatsVersionFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/stats-version.json
+	--event backend/tests/events/stats-version.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-stats-version-missing-deck: sam-build
 	sam local invoke StatsVersionFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/stats-version-missing-deck.json
+	--event backend/tests/events/stats-version-missing-deck.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-get-random-decks: sam-build
 	sam local invoke GetRandomDecksFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/get-random-decks.json
+	--event backend/tests/events/get-random-decks.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-get-random-decks-invalid: sam-build
 	sam local invoke GetRandomDecksFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/get-random-decks-invalid.json
+	--event backend/tests/events/get-random-decks-invalid.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-deck-versions: sam-build
 	sam local invoke DeckVersionsFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/deck-versions.json
+	--event backend/tests/events/deck-versions.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-deck-versions-not-found: sam-build
 	sam local invoke DeckVersionsFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/deck-versions-not-found.json
+	--event backend/tests/events/deck-versions-not-found.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-get-diff: sam-build
 	sam local invoke GetDiffFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/get-diff.json
+	--event backend/tests/events/get-diff.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-get-diff-empty: sam-build
 	sam local invoke GetDiffFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/get-diff-empty.json
+	--event backend/tests/events/get-diff-empty.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-get-diff-not-found: sam-build
 	sam local invoke GetDiffFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/get-diff-not-found.json
+	--event backend/tests/events/get-diff-not-found.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-sync-decks: sam-build
 	sam local invoke SyncDecksFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/sync-decks.json
+	--event backend/tests/events/sync-decks.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-sync-decks-all: sam-build
 	sam local invoke SyncDecksFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/sync-decks-all.json
+	--event backend/tests/events/sync-decks-all.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-profile-get: sam-build
 	sam local invoke ProfileFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/profile-get.json
+	--event backend/tests/events/profile-get.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-profile-get-no-jwt: sam-build
 	sam local invoke ProfileFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/profile-get-no-jwt.json
+	--event backend/tests/events/profile-get-no-jwt.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-profile-put: sam-build
 	sam local invoke ProfileFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/profile-put.json
+	--event backend/tests/events/profile-put.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-profile-put-unsupported-source: sam-build
 	sam local invoke ProfileFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/profile-put-unsupported-source.json
+	--event backend/tests/events/profile-put-unsupported-source.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-profile-put-no-username: sam-build
 	sam local invoke ProfileFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/profile-put-no-username.json
+	--event backend/tests/events/profile-put-no-username.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-scryfall-load: sam-build
 	sam local invoke ScryfallLoadFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/scryfall-load.json
+	--event backend/tests/events/scryfall-load.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-scryfall-download: sam-build
 	sam local invoke ScryfallDownloadFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/scryfall-download.json
+	--event backend/tests/events/scryfall-download.json \
+	--env-vars $(SAM_LOCAL_ENV)
 
 invoke-build-commanders-index: sam-build
 	sam local invoke BuildCommandersIndexFunction \
 	--template-file .aws-sam/build/template.yaml \
-	--event backend/tests/events/build-commanders-index.json
+	--event backend/tests/events/build-commanders-index.json \
+	--env-vars $(SAM_LOCAL_ENV)
