@@ -31,6 +31,3 @@ def deck_diff_table() -> Any:
 
 def cards_dimension_table() -> Any:
     return table_from_environment("CARDS_DIM_TABLE")
-
-def print_map_table() -> Any:
-    return table_from_environment("PRINT_MAP_TABLE")
