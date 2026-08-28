@@ -86,6 +86,20 @@ Resources:
         Variables:
           STATE_TABLE: !Ref DeckStateTableName
           USERS_TABLE: !Ref UserProfileTableName
+    Policies:
+      - Statement:
+        - Sid: ReadUserProfile
+          Effect: Allow
+          Action:
+            - dynamodb:GetItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+        - Sid: QueryDeckState
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
 
   GetGamesFunction:
     Type: AWS::Serverless::Function
@@ -97,6 +111,14 @@ Resources:
       Environment:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+    Policies:
+      - Statement:
+        - Sid: QueryPlayEvents
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
 
   LogPlayEventFunction:
     Type: AWS::Serverless::Function
@@ -109,6 +131,21 @@ Resources:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
           STATE_TABLE: !Ref DeckStateTableName
+    Policies:
+      - Statement:
+        - Sid: ReadAndUpdateDeckState
+          Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+        - Sid: WritePlayEvent
+          Effect: Allow
+          Action:
+            - dynamodb:PutItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
 
   StatsSummaryFunction:
     Type: AWS::Serverless::Function
@@ -120,6 +157,14 @@ Resources:
       Environment:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+    Policies:
+      - Statement:
+        - Sid: QueryPlayEvents
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
 
   StatsVersionFunction:
     Type: AWS::Serverless::Function
@@ -131,6 +176,14 @@ Resources:
       Environment:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+    Policies:
+      - Statement:
+        - Sid: QueryPlayEvents
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
 
   GetRandomDecksFunction:
     Type: AWS::Serverless::Function
@@ -144,6 +197,26 @@ Resources:
           STATE_TABLE: !Ref DeckStateTableName
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
           USERS_TABLE: !Ref UserProfileTableName
+    Policies:
+      - Statement:
+        - Sid: ReadUserProfile
+          Effect: Allow
+          Action:
+            - dynamodb:GetItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+        - Sid: QueryDeckState
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+        - Sid: QueryPlayEvents
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
 
   DeckVersionsFunction:
     Type: AWS::Serverless::Function
@@ -156,6 +229,20 @@ Resources:
         Variables:
           CHANGE_LOG_TABLE: !Ref DeckChangeLogTableName
           STATE_TABLE: !Ref DeckStateTableName
+    Policies:
+      - Statement:
+        - Sid: ReadDeckState
+          Effect: Allow
+          Action:
+            - dynamodb:GetItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+        - Sid: QueryDeckHistory
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
 
   GetDiffFunction:
     Type: AWS::Serverless::Function
@@ -171,6 +258,39 @@ Resources:
           STATE_TABLE: !Ref DeckStateTableName
           CARDS_DIM_TABLE: !Ref CardsDimTableName
           SNAPSHOT_BUCKET: !Ref SnapshotBucketName
+    Policies:
+      - Statement:
+        - Sid: ReadDeckState
+          Effect: Allow
+          Action:
+            - dynamodb:GetItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+        - Sid: QueryDeckHistory
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+        - Sid: ReadWriteDiffCache
+          Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckDiffTableName}
+        - Sid: BatchReadCardDimension
+          Effect: Allow
+          Action:
+            - dynamodb:BatchGetItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
+        - Sid: ReadDeckSnapshots
+          Effect: Allow
+          Action:
+            - s3:GetObject
+          Resource:
+            - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
 
   SyncDecksFunction:
     Type: AWS::Serverless::Function
@@ -186,6 +306,33 @@ Resources:
           USERS_TABLE: !Ref UserProfileTableName
           BUCKET_NAME: !Ref SnapshotBucketName
           ARCHIDEKT_FIXTURE_DIR: !Ref ArchidektFixtureDir
+    Policies:
+      - Statement:
+        - Sid: ReadUpdateDeckState
+          Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+        - Sid: WriteDeckHistory
+          Effect: Allow
+          Action:
+            - dynamodb:PutItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+        - Sid: QueryEnabledProfiles
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}/index/gsi_ingestion_enabled
+        - Sid: WriteDeckSnapshots
+          Effect: Allow
+          Action:
+            - s3:PutObject
+          Resource:
+            - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
 
   ProfileFunction:
     Type: AWS::Serverless::Function
@@ -199,6 +346,21 @@ Resources:
           USERS_TABLE: !Ref UserProfileTableName
           INGEST_LAMBDA_NAME: !Ref SyncDecksFunction
           INVOKE_INGEST_ON_SAVE: !Ref InvokeIngestOnSave
+    Policies:
+      - Statement:
+        - Sid: ReadWriteUserProfile
+          Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+        - Sid: InvokeDeckSync
+          Effect: Allow
+          Action:
+            - lambda:InvokeFunction
+          Resource:
+            - !GetAtt SyncDecksFunction.Arn
 
   ScryfallLoadFunction:
     Type: AWS::Serverless::Function
@@ -211,6 +373,20 @@ Resources:
         Variables:
           RAW_BUCKET: !Ref SnapshotBucketName
           CARDS_DIM_TABLE: !Ref CardsDimTableName
+    Policies:
+      - Statement:
+        - Sid: ReadScryfallBulkData
+          Effect: Allow
+          Action:
+            - s3:GetObject
+          Resource:
+            - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
+        - Sid: WriteCardsDimension
+          Effect: Allow
+          Action:
+            - dynamodb:BatchWriteItem
+          Resource:
+            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
 
   ScryfallDownloadFunction:
     Type: AWS::Serverless::Function
@@ -222,6 +398,16 @@ Resources:
       Environment:
         Variables:
           RAW_BUCKET: !Ref SnapshotBucketName
+    Policies:
+      - Statement:
+        - Sid: ManageScryfallBulkObjects
+          Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:AbortMultipartUpload
+          Resource:
+            - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
 
   BuildCommandersIndexFunction:
     Type: AWS::Serverless::Function
@@ -234,3 +420,11 @@ Resources:
         Variables:
           FRONTEND_BUCKET: !Ref FrontendBucketName
           COMMANDERS_INDEX_KEY: data/commanders_index.json
+    Policies:
+      - Statement:
+        - Sid: WriteCommanderIndex
+          Effect: Allow
+          Action:
+            - s3:PutObject
+          Resource:
+            - !Sub arn:${AWS::Partition}:s3:::${FrontendBucketName}/data/commnaders_index.json
