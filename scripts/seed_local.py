@@ -18,7 +18,6 @@ PLAY_EVENTS_TABLE = "commandlog_local_play_events"
 CHANGE_LOG_TABLE = "commandlog_local_deck_change_log"
 DIFF_TABLE = "commandlog_local_deck_diffs"
 CARDS_DIM_TABLE = "commandlog_local_cards_dim"
-PRINT_MAP_TABLE = "commandlog_local_scryfall_print_map"
 
 SNAPSHOT_BUCKET = "commandlog-local-snapshots"
 FRONTEND_BUCKET = "commandlog-local-frontend"
@@ -205,25 +204,6 @@ def create_cards_dimension_table(dynamodb: Any) -> None:
 
     table.wait_until_exists()
     print(f"Created table: {CARDS_DIM_TABLE}")
-
-def create_print_map_table(dynamodb: Any) -> None:
-    if table_exists(dynamodb, PRINT_MAP_TABLE):
-        print(f"Table already exists: {PRINT_MAP_TABLE}")
-        return
-
-    table = dynamodb.create_table(
-        TableName=PRINT_MAP_TABLE,
-        KeySchema=[
-            {"AttributeName": "scryfall_id", "KeyType": "HASH"}
-        ],
-        AttributeDefinitions=[
-            {"AttributeName": "scryfall_id", "AttributeType": "S"}
-        ],
-        BillingMode="PAY_PER_REQUEST",
-    )
-
-    table.wait_until_exists()
-    print(f"Created table: {PRINT_MAP_TABLE}")
 
 def create_snapshot_bucket(s3_client: Any) -> None:
     try:
@@ -464,7 +444,6 @@ def main() -> int:
         create_change_log_table(dynamodb)
         create_diff_table(dynamodb)
         create_cards_dimension_table(dynamodb)
-        create_print_map_table(dynamodb)
 
         create_snapshot_bucket(s3_client)
         create_frontend_bucket(s3_client)
