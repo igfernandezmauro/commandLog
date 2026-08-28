@@ -24,7 +24,6 @@
 - `CHANGE_TABLE`: `mtg_app_deck_change_log`
 - `DEBUG_SAVE_SEARCH`: `true`
 - `DRY_RUN`: `false`
-- `PRINT_MAP_TABLE`: `mtg_app_scryfall_print_map`
 - `STATE_TABLE`: `mtg_app_deck_state_v2`
 - `USERS_TABLE`: `mtg_app_user_profile`
 
@@ -49,7 +48,6 @@
 - `CARDS_DIM_TABLE`: `mtg_app_cards_dim`
 - `CHANGE_LOG_TABLE`: `mtg_app_deck_change_log`
 - `DECK_DIFF_TABLE`: `mtg_app_deck_diffs`
-- `PRINT_MAP_TABLE`: `mtg_app_scryfall_print_map`
 - `SNAPSHOT_BUCKET`: `ignacio-mtg-app-raw-ca-central-1`
 - `STATE_TABLE`: `mtg_app_deck_state_v2`
 
