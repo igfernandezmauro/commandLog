@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: CommandLog disposable development data infrastructure
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedPattern: '^[a-z0-9-]+$'
+
+Resources:
+  DeckStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub commandlog-${EnvironmentName}-deck-state
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_key
+          AttributeType: S
+        - AttributeName: deck_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_key
+          KeyType: HASH
+        - AttributeName: deck_id
+          KeyType: RANGE
+  
+  PlayEventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub commandlog-${EnvironmentName}-play-events
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_key
+          AttributeType: S
+        - AttributeName: played_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_key
+          KeyType: HASH
+        - AttributeName: played_at
+          KeyType: RANGE
+
+  UserProfileTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub commandlog-${EnvironmentName}-user-profile
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_key
+          AttributeType: S
+        - AttributeName: ingestion_enabled_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_key
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: gsi_ingestion_enabled
+          KeySchema:
+            - AttributeName: ingestion_enabled_key
+              KeyType: HASH
+            - AttributeName: user_key
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  DeckChangeLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub commandlog-${EnvironmentName}-deck-change-log
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: deck_id
+          AttributeType: S
+        - AttributeName: changed_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: deck_id
+          KeyType: HASH
+        - AttributeName: changed_at
+          KeyType: RANGE
+
+  DeckDiffTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub commandlog-${EnvironmentName}-deck-diffs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: deck_id
+          AttributeType: S
+        - AttributeName: diff_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: deck_id
+          KeyType: HASH
+        - AttributeName: diff_key
+          KeyType: RANGE
+
+  CardsDimTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub commandlog-${EnvironmentName}-cards-dim
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: oracle_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: oracle_id
+          KeyType: HASH
+
+  SnapshotBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub commandlog-${EnvironmentName}-${AWS::AccountId}-${AWS::Region}-snapshots
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  RawBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub commandlog-${EnvironmentName}-${AWS::AccountId}-${AWS::Region}-raw
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+Outputs:
+  DeckStateTableName:
+    Value: !Ref DeckStateTable
+  
+  PlayEventsTableName:
+    Value: !Ref PlayEventsTable
+
+  UserProfileTableName:
+    Value: !Ref UserProfileTable
+
+  DeckChangeLogTableName:
+    Value: !Ref DeckChangeLogTable
+
+  DeckDiffTableName:
+    Value: !Ref DeckDiffTable
+
+  CardsDimTableName:
+    Value: !Ref CardsDimTable
+
+  SnapshotBucketName:
+    Value: !Ref SnapshotBucket
+  
+  RawBucketName:
+    Value: !Ref RawBucket
