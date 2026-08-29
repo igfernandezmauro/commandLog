@@ -44,7 +44,7 @@ Parameters:
     Type: String
     Default: commandlog-local-snapshots
 
-  FrontendBucketName:
+  GeneratedBucketName:
     Type: String
     Default: commandlog-local-frontend
 
@@ -63,6 +63,14 @@ Parameters:
       - "true"
       - "false"
 
+  CognitoIssuer:
+    Type: String
+    Description: JWT issuer URL for the environment Cognito User Pool
+
+  CognitoAudience:
+    Type: String
+    Description: Cognito app client ID accepted by the JWT authorizer
+
 Globals:
   Function:
     CodeUri: ../backend/
@@ -75,6 +83,22 @@ Globals:
         AWS_ENDPOINT_URL: !Ref AwsEndpointUrl
 
 Resources:
+  CommandLogHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: !Sub commandlog-${AppEnvironment}-api
+      StageName: $default
+      FailOnWarnings: true
+      Auth:
+        Authorizers:
+          CommandLogJwtAuthorizer:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              issuer: !Ref CognitoIssuer
+              audience:
+                - !Ref CognitoAudience
+        DefaultAuthorizer: CommandLogJwtAuthorizer
+
   ListDecksFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -86,20 +110,28 @@ Resources:
         Variables:
           STATE_TABLE: !Ref DeckStateTableName
           USERS_TABLE: !Ref UserProfileTableName
-    Policies:
-      - Statement:
-        - Sid: ReadUserProfile
-          Effect: Allow
-          Action:
-            - dynamodb:GetItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
-        - Sid: QueryDeckState
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+      Policies:
+        - Statement:
+          - Sid: ReadUserProfile
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+          - Sid: QueryDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+      Events:
+        ListDecks:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /decks
+            Method: GET
+            PayloadFormatVersion: "2.0"
 
   GetGamesFunction:
     Type: AWS::Serverless::Function
@@ -111,14 +143,22 @@ Resources:
       Environment:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
-    Policies:
-      - Statement:
-        - Sid: QueryPlayEvents
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Policies:
+        - Statement:
+          - Sid: QueryPlayEvents
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        GetGames:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /games
+            Method: GET
+            PayloadFormatVersion: "2.0"
 
   LogPlayEventFunction:
     Type: AWS::Serverless::Function
@@ -131,21 +171,29 @@ Resources:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
           STATE_TABLE: !Ref DeckStateTableName
-    Policies:
-      - Statement:
-        - Sid: ReadAndUpdateDeckState
-          Effect: Allow
-          Action:
-            - dynamodb:GetItem
-            - dynamodb:UpdateItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
-        - Sid: WritePlayEvent
-          Effect: Allow
-          Action:
-            - dynamodb:PutItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Policies:
+        - Statement:
+          - Sid: ReadAndUpdateDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: WritePlayEvent
+            Effect: Allow
+            Action:
+              - dynamodb:PutItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        LogPlayEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /play
+            Method: POST
+            PayloadFormatVersion: "2.0"
 
   StatsSummaryFunction:
     Type: AWS::Serverless::Function
@@ -157,14 +205,22 @@ Resources:
       Environment:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
-    Policies:
-      - Statement:
-        - Sid: QueryPlayEvents
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Policies:
+        - Statement:
+          - Sid: QueryPlayEvents
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        StatsSummary:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /stats/summary
+            Method: GET
+            PayloadFormatVersion: "2.0"
 
   StatsVersionFunction:
     Type: AWS::Serverless::Function
@@ -176,14 +232,22 @@ Resources:
       Environment:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
-    Policies:
-      - Statement:
-        - Sid: QueryPlayEvents
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Policies:
+        - Statement:
+          - Sid: QueryPlayEvents
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        StatsVersion:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /stats/version
+            Method: GET
+            PayloadFormatVersion: "2.0"
 
   GetRandomDecksFunction:
     Type: AWS::Serverless::Function
@@ -197,26 +261,34 @@ Resources:
           STATE_TABLE: !Ref DeckStateTableName
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
           USERS_TABLE: !Ref UserProfileTableName
-    Policies:
-      - Statement:
-        - Sid: ReadUserProfile
-          Effect: Allow
-          Action:
-            - dynamodb:GetItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
-        - Sid: QueryDeckState
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
-        - Sid: QueryPlayEvents
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Policies:
+        - Statement:
+          - Sid: ReadUserProfile
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+          - Sid: QueryDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: QueryPlayEvents
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        GetRandomDecks:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /pick
+            Method: GET
+            PayloadFormatVersion: "2.0"
 
   DeckVersionsFunction:
     Type: AWS::Serverless::Function
@@ -229,20 +301,28 @@ Resources:
         Variables:
           CHANGE_LOG_TABLE: !Ref DeckChangeLogTableName
           STATE_TABLE: !Ref DeckStateTableName
-    Policies:
-      - Statement:
-        - Sid: ReadDeckState
-          Effect: Allow
-          Action:
-            - dynamodb:GetItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
-        - Sid: QueryDeckHistory
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+      Policies:
+        - Statement:
+          - Sid: ReadDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: QueryDeckHistory
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+      Events:
+        DeckVersions:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /decks/{deck_id}
+            Method: GET
+            PayloadFormatVersion: "2.0"
 
   GetDiffFunction:
     Type: AWS::Serverless::Function
@@ -258,39 +338,47 @@ Resources:
           STATE_TABLE: !Ref DeckStateTableName
           CARDS_DIM_TABLE: !Ref CardsDimTableName
           SNAPSHOT_BUCKET: !Ref SnapshotBucketName
-    Policies:
-      - Statement:
-        - Sid: ReadDeckState
-          Effect: Allow
-          Action:
-            - dynamodb:GetItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
-        - Sid: QueryDeckHistory
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
-        - Sid: ReadWriteDiffCache
-          Effect: Allow
-          Action:
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckDiffTableName}
-        - Sid: BatchReadCardDimension
-          Effect: Allow
-          Action:
-            - dynamodb:BatchGetItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
-        - Sid: ReadDeckSnapshots
-          Effect: Allow
-          Action:
-            - s3:GetObject
-          Resource:
-            - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
+      Policies:
+        - Statement:
+          - Sid: ReadDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: QueryDeckHistory
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+          - Sid: ReadWriteDiffCache
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckDiffTableName}
+          - Sid: BatchReadCardDimension
+            Effect: Allow
+            Action:
+              - dynamodb:BatchGetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
+          - Sid: ReadDeckSnapshots
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
+      Events:
+        GetDeckDiff:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /decks/{deck_id}/diff
+            Method: GET
+            PayloadFormatVersion: "2.0"
 
   SyncDecksFunction:
     Type: AWS::Serverless::Function
@@ -306,33 +394,33 @@ Resources:
           USERS_TABLE: !Ref UserProfileTableName
           BUCKET_NAME: !Ref SnapshotBucketName
           ARCHIDEKT_FIXTURE_DIR: !Ref ArchidektFixtureDir
-    Policies:
-      - Statement:
-        - Sid: ReadUpdateDeckState
-          Effect: Allow
-          Action:
-            - dynamodb:GetItem
-            - dynamodb:UpdateItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
-        - Sid: WriteDeckHistory
-          Effect: Allow
-          Action:
-            - dynamodb:PutItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
-        - Sid: QueryEnabledProfiles
-          Effect: Allow
-          Action:
-            - dynamodb:Query
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}/index/gsi_ingestion_enabled
-        - Sid: WriteDeckSnapshots
-          Effect: Allow
-          Action:
-            - s3:PutObject
-          Resource:
-            - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
+      Policies:
+        - Statement:
+          - Sid: ReadUpdateDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: WriteDeckHistory
+            Effect: Allow
+            Action:
+              - dynamodb:PutItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+          - Sid: QueryEnabledProfiles
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}/index/gsi_ingestion_enabled
+          - Sid: WriteDeckSnapshots
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
 
   ProfileFunction:
     Type: AWS::Serverless::Function
@@ -346,21 +434,36 @@ Resources:
           USERS_TABLE: !Ref UserProfileTableName
           INGEST_LAMBDA_NAME: !Ref SyncDecksFunction
           INVOKE_INGEST_ON_SAVE: !Ref InvokeIngestOnSave
-    Policies:
-      - Statement:
-        - Sid: ReadWriteUserProfile
-          Effect: Allow
-          Action:
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
-        - Sid: InvokeDeckSync
-          Effect: Allow
-          Action:
-            - lambda:InvokeFunction
-          Resource:
-            - !GetAtt SyncDecksFunction.Arn
+      Policies:
+        - Statement:
+          - Sid: ReadWriteUserProfile
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+          - Sid: InvokeDeckSync
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              - !GetAtt SyncDecksFunction.Arn
+      Events:
+        GetProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /me/profile
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        PutProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /me/profile
+            Method: PUT
+            PayloadFormatVersion: "2.0"
 
   ScryfallLoadFunction:
     Type: AWS::Serverless::Function
@@ -373,20 +476,20 @@ Resources:
         Variables:
           RAW_BUCKET: !Ref SnapshotBucketName
           CARDS_DIM_TABLE: !Ref CardsDimTableName
-    Policies:
-      - Statement:
-        - Sid: ReadScryfallBulkData
-          Effect: Allow
-          Action:
-            - s3:GetObject
-          Resource:
-            - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
-        - Sid: WriteCardsDimension
-          Effect: Allow
-          Action:
-            - dynamodb:BatchWriteItem
-          Resource:
-            - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
+      Policies:
+        - Statement:
+          - Sid: ReadScryfallBulkData
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
+          - Sid: WriteCardsDimension
+            Effect: Allow
+            Action:
+              - dynamodb:BatchWriteItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
 
   ScryfallDownloadFunction:
     Type: AWS::Serverless::Function
@@ -398,16 +501,16 @@ Resources:
       Environment:
         Variables:
           RAW_BUCKET: !Ref SnapshotBucketName
-    Policies:
-      - Statement:
-        - Sid: ManageScryfallBulkObjects
-          Effect: Allow
-          Action:
-            - s3:GetObject
-            - s3:PutObject
-            - s3:AbortMultipartUpload
-          Resource:
-            - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
+      Policies:
+        - Statement:
+          - Sid: ManageScryfallBulkObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:AbortMultipartUpload
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
 
   BuildCommandersIndexFunction:
     Type: AWS::Serverless::Function
@@ -418,13 +521,20 @@ Resources:
       Timeout: 900
       Environment:
         Variables:
-          FRONTEND_BUCKET: !Ref FrontendBucketName
+          FRONTEND_BUCKET: !Ref GeneratedBucketName
           COMMANDERS_INDEX_KEY: data/commanders_index.json
-    Policies:
-      - Statement:
-        - Sid: WriteCommanderIndex
-          Effect: Allow
-          Action:
-            - s3:PutObject
-          Resource:
-            - !Sub arn:${AWS::Partition}:s3:::${FrontendBucketName}/data/commnaders_index.json
+      Policies:
+        - Statement:
+          - Sid: WriteCommanderIndex
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${GeneratedBucketName}/data/commnaders_index.json
+
+Outputs:
+  HttpApiId:
+    Value: !Ref CommandLogHttpApi
+
+  HttpApiUrl:
+    Value: !Sub https://${CommandLogHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}
