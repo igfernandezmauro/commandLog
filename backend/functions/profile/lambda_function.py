@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 lambda_client = boto3.client(
     "lambda",
     region_name=os.getenv("AWS_REGION", "ca-central-1"),
-    endpoint_url=os.getenv("AWS_ENDPOINT_URL")
+    endpoint_url=os.getenv("AWS_ENDPOINT_URL") or None
 )
 
 def now_iso() -> str:
