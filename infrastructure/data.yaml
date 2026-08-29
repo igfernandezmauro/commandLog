@@ -142,6 +142,23 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
+  GeneratedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub commandlog-${EnvironmentName}-${AWS::AccountId}-${AWS::Region}-generated
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
 Outputs:
   DeckStateTableName:
     Value: !Ref DeckStateTable
@@ -166,3 +183,6 @@ Outputs:
   
   RawBucketName:
     Value: !Ref RawBucket
+
+  GeneratedBucketName:
+    Value: !Ref GeneratedBucket
