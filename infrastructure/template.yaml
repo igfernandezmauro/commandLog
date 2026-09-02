@@ -490,6 +490,24 @@ Resources:
               - dynamodb:BatchWriteItem
             Resource:
               - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
+      Events:
+        LatestOracleCardsCreated:
+          Type: EventBridgeRule
+          Properties:
+            RuleName: !Sub commandlog-${AppEnvironment}-scryfall-latest-created
+            State: ENABLED
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - Object Created
+              detail:
+                bucket:
+                  name:
+                    - !Ref RawBucketName
+                object:
+                  key:
+                    - scryfall/oracle_cards/latest.jsonl.gz
 
   ScryfallDownloadFunction:
     Type: AWS::Serverless::Function
@@ -511,6 +529,16 @@ Resources:
               - s3:AbortMultipartUpload
             Resource:
               - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
+      Events:
+        ScryfallSync:
+          Type: ScheduleV2
+          Properties:
+            Name: !Sub commandlog-${AppEnvironment}-scryfall-sync
+            Description: Download current Scryfall Oracle Cards bulk data
+            ScheduleExpression: rate(30 days)
+            FlexibleTimeWindow:
+              Mode: "OFF"
+            State: ENABLED
 
   BuildCommandersIndexFunction:
     Type: AWS::Serverless::Function
@@ -531,6 +559,16 @@ Resources:
               - s3:PutObject
             Resource:
               - !Sub arn:${AWS::Partition}:s3:::${GeneratedBucketName}/data/commnaders_index.json
+      Events:
+        CommandersIndex:
+          Type: ScheduleV2
+          Properties:
+            Name: !Sub commandlog-${AppEnvironment}-commanders-index
+            Description: Rebuild the Commanders index
+            ScheduleExpression: rate(30 days)
+            FlexibleTimeWindow:
+              Mode: "OFF"
+            State: ENABLED
 
 Outputs:
   HttpApiId:

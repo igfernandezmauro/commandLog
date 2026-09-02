@@ -1,0 +1,343 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REGION="${AWS_REGION:-ca-central-1}"
+
+APP_STACK="commandlog-dev-app"
+DATA_STACK="commandlog-dev-data"
+AUTH_STACK="commandlog-dev-auth"
+
+
+stack_output() {
+    local stack="$1"
+    local key="$2"
+
+    aws cloudformation describe-stacks \
+        --stack-name "$stack" \
+        --region "$REGION" \
+        --query "Stacks[0].Outputs[?OutputKey=='${key}'].OutputValue" \
+        --output text
+}
+
+
+validate() {
+    echo "Validating application template..."
+    sam validate \
+        --lint \
+        --template-file infrastructure/template.yaml
+
+    echo "Validating data template..."
+    aws cloudformation validate-template \
+        --template-body file://infrastructure/data.yaml \
+        --region "$REGION" \
+        >/dev/null
+
+    echo "Validation passed."
+}
+
+
+build() {
+    echo "Building application..."
+    rm -rf .aws-sam
+
+    sam build \
+        --template-file infrastructure/template.yaml
+}
+
+
+deploy_app() {
+    validate
+    build
+
+    local account_id
+    account_id=$(aws sts get-caller-identity \
+        --query Account \
+        --output text)
+
+    local app_role_arn
+    app_role_arn="arn:aws:iam::${account_id}:role/commandlog-dev-app-cloudformation-role"
+
+    local deck_state
+    local play_events
+    local user_profile
+    local change_log
+    local deck_diff
+    local cards_dim
+    local snapshot_bucket
+    local raw_bucket
+    local generated_bucket
+    local issuer
+    local client_id
+
+    deck_state=$(stack_output "$DATA_STACK" DeckStateTableName)
+    play_events=$(stack_output "$DATA_STACK" PlayEventsTableName)
+    user_profile=$(stack_output "$DATA_STACK" UserProfileTableName)
+    change_log=$(stack_output "$DATA_STACK" DeckChangeLogTableName)
+    deck_diff=$(stack_output "$DATA_STACK" DeckDiffTableName)
+    cards_dim=$(stack_output "$DATA_STACK" CardsDimTableName)
+    snapshot_bucket=$(stack_output "$DATA_STACK" SnapshotBucketName)
+    raw_bucket=$(stack_output "$DATA_STACK" RawBucketName)
+    generated_bucket=$(stack_output "$DATA_STACK" GeneratedBucketName)
+
+    issuer=$(stack_output "$AUTH_STACK" Issuer)
+    client_id=$(stack_output "$AUTH_STACK" UserPoolClientId)
+
+    sam deploy \
+        --template-file "$(pwd)/.aws-sam/build/template.yaml" \
+        --stack-name "$APP_STACK" \
+        --region "$REGION" \
+        --capabilities CAPABILITY_IAM \
+        --role-arn "$app_role_arn" \
+        --resolve-s3 \
+        --parameter-overrides \
+            AppEnvironment=dev \
+            DeckStateTableName="$deck_state" \
+            PlayEventsTableName="$play_events" \
+            UserProfileTableName="$user_profile" \
+            DeckChangeLogTableName="$change_log" \
+            DeckDiffTableName="$deck_diff" \
+            CardsDimTableName="$cards_dim" \
+            SnapshotBucketName="$snapshot_bucket" \
+            RawBucketName="$raw_bucket" \
+            GeneratedBucketName="$generated_bucket" \
+            CognitoIssuer="$issuer" \
+            CognitoAudience="$client_id"
+}
+
+
+deploy_data() {
+    local account_id
+    account_id=$(aws sts get-caller-identity \
+        --query Account \
+        --output text)
+
+    local data_role_arn
+    data_role_arn="arn:aws:iam::${account_id}:role/commandlog-dev-data-cloudformation-role"
+
+    aws cloudformation deploy \
+        --template-file infrastructure/data.yaml \
+        --stack-name "$DATA_STACK" \
+        --parameter-overrides EnvironmentName=dev \
+        --role-arn "$data_role_arn" \
+        --region "$REGION"
+}
+
+
+routes() {
+    local api_id
+    api_id=$(stack_output "$APP_STACK" HttpApiId)
+
+    aws apigatewayv2 get-routes \
+        --api-id "$api_id" \
+        --region "$REGION" \
+        --query 'Items[].{
+            RouteKey:RouteKey,
+            AuthorizationType:AuthorizationType
+        }' \
+        --output table
+}
+
+
+status() {
+    aws cloudformation describe-stacks \
+        --stack-name "$DATA_STACK" \
+        --region "$REGION" \
+        --query 'Stacks[0].[StackName,StackStatus]' \
+        --output text
+
+    aws cloudformation describe-stacks \
+        --stack-name "$AUTH_STACK" \
+        --region "$REGION" \
+        --query 'Stacks[0].[StackName,StackStatus]' \
+        --output text
+
+    aws cloudformation describe-stacks \
+        --stack-name "$APP_STACK" \
+        --region "$REGION" \
+        --query 'Stacks[0].[StackName,StackStatus]' \
+        --output text
+}
+
+
+events() {
+    local raw_bucket
+    raw_bucket=$(stack_output "$DATA_STACK" RawBucketName)
+
+    echo "=== Raw bucket EventBridge configuration ==="
+    aws s3api get-bucket-notification-configuration \
+        --bucket "$raw_bucket" \
+        --region "$REGION"
+
+    echo
+    echo "=== CommandLog schedules ==="
+    aws scheduler list-schedules \
+        --name-prefix commandlog-dev- \
+        --region "$REGION" \
+        --query 'Schedules[].{
+            Name:Name,
+            State:State,
+            Target:Target.Arn
+        }' \
+        --output table
+
+    echo
+    echo "=== Scryfall latest-object rule ==="
+    aws events describe-rule \
+        --name commandlog-dev-scryfall-latest-created \
+        --region "$REGION"
+
+    echo
+    echo "=== Rule targets ==="
+    aws events list-targets-by-rule \
+        --rule commandlog-dev-scryfall-latest-created \
+        --region "$REGION" \
+        --output table
+}
+
+
+events_test() {
+    local raw_bucket
+    raw_bucket=$(stack_output "$DATA_STACK" RawBucketName)
+
+    local rule_name="commandlog-dev-scryfall-latest-created"
+    local pattern_file
+    pattern_file=$(mktemp)
+
+    trap 'rm -f "$pattern_file"' RETURN
+
+    aws events describe-rule \
+        --name "$rule_name" \
+        --region "$REGION" \
+        --query 'EventPattern' \
+        --output text > "$pattern_file"
+
+    test_event() {
+        local name="$1"
+        local bucket="$2"
+        local key="$3"
+        local expected="$4"
+
+        local event
+        event=$(cat <<EOF
+{
+  "version": "0",
+  "id": "commandlog-test",
+  "detail-type": "Object Created",
+  "source": "aws.s3",
+  "account": "000000000000",
+  "time": "2026-09-01T00:00:00Z",
+  "region": "$REGION",
+  "resources": [],
+  "detail": {
+    "bucket": {
+      "name": "$bucket"
+    },
+    "object": {
+      "key": "$key"
+    }
+  }
+}
+EOF
+)
+
+        local result
+        result=$(aws events test-event-pattern \
+            --event-pattern "file://$pattern_file" \
+            --event "$event" \
+            --region "$REGION" \
+            --query Result \
+            --output text)
+
+        if [[ "$result" == "$expected" ]]; then
+            printf "PASS  %-28s expected=%s actual=%s\n" \
+                "$name" "$expected" "$result"
+        else
+            printf "FAIL  %-28s expected=%s actual=%s\n" \
+                "$name" "$expected" "$result"
+            return 1
+        fi
+    }
+
+    echo "Testing EventBridge rule: $rule_name"
+    echo
+
+    test_event \
+        "latest Oracle Cards" \
+        "$raw_bucket" \
+        "scryfall/oracle_cards/latest.jsonl.gz" \
+        "True"
+
+    test_event \
+        "historical Oracle Cards" \
+        "$raw_bucket" \
+        "scryfall/oracle_cards/dt=20260901/oracle_cards_20260901T000000Z.jsonl.gz" \
+        "False"
+
+    test_event \
+        "wrong bucket" \
+        "commandlog-wrong-bucket" \
+        "scryfall/oracle_cards/latest.jsonl.gz" \
+        "False"
+
+    echo
+    echo "Background event tests passed."
+}
+
+
+help() {
+    cat <<'HELP'
+CommandLog development commands
+
+Usage:
+  dev <command>
+
+Commands:
+  validate       Validate app and data templates
+  build          Build the SAM application
+  deploy         Validate, build, and deploy the dev app stack
+  data-deploy    Deploy/update the dev data stack
+  routes         List deployed dev HTTP API routes
+  status         Show dev CloudFormation stack statuses
+  events         Show deployed background event configuration
+  events-test    Test background EventBridge routing rules
+  help           Show this help
+HELP
+}
+
+
+case "${1:-help}" in
+    validate)
+        validate
+        ;;
+    build)
+        build
+        ;;
+    deploy)
+        deploy_app
+        ;;
+    data-deploy)
+        deploy_data
+        ;;
+    routes)
+        routes
+        ;;
+    status)
+        status
+        ;;
+    events)
+        events
+        ;;
+    events-test)
+        events_test
+        ;;
+    help|-h|--help)
+        help
+        ;;
+    *)
+        echo "Unknown command: $1" >&2
+        echo
+        help
+        exit 1
+        ;;
+esac

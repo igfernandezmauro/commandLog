@@ -13,6 +13,15 @@ DEFAULT_KEY = "scryfall/oracle_cards/latest.jsonl.gz"
 
 def source_from_event(event):
     try:
+        if event.get("source") == "aws.s3" and event.get("detail-type") == "Object Created":
+            detail = event.get("detail") or {}
+
+            bucket = (detail.get("bucket") or {}).get("name")
+            key = (detail.get("object") or {}).get("key")
+
+            if bucket and key:
+                return bucket, key
+
         record = (event.get("Records") or [])[0]
 
         if record.get("eventSource") != "aws:s3":
