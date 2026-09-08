@@ -7,6 +7,7 @@ REGION="${AWS_REGION:-ca-central-1}"
 APP_STACK="commandlog-dev-app"
 DATA_STACK="commandlog-dev-data"
 AUTH_STACK="commandlog-dev-auth"
+FRONTEND_STACK="commandlog-dev-frontend"
 
 
 stack_output() {
@@ -30,6 +31,12 @@ validate() {
     echo "Validating data template..."
     aws cloudformation validate-template \
         --template-body file://infrastructure/data.yaml \
+        --region "$REGION" \
+        >/dev/null
+
+    echo "Validating frontend template..."
+    aws cloudformation validate-template \
+        --template-body file://infrastructure/frontend.yaml \
         --region "$REGION" \
         >/dev/null
 
@@ -69,6 +76,7 @@ deploy_app() {
     local generated_bucket
     local issuer
     local client_id
+    local frontend_origin
 
     deck_state=$(stack_output "$DATA_STACK" DeckStateTableName)
     play_events=$(stack_output "$DATA_STACK" PlayEventsTableName)
@@ -82,6 +90,8 @@ deploy_app() {
 
     issuer=$(stack_output "$AUTH_STACK" Issuer)
     client_id=$(stack_output "$AUTH_STACK" UserPoolClientId)
+
+    frontend_origin="https://$(stack_output "$FRONTEND_STACK" DistributionDomainName)"
 
     sam deploy \
         --template-file "$(pwd)/.aws-sam/build/template.yaml" \
@@ -102,7 +112,8 @@ deploy_app() {
             RawBucketName="$raw_bucket" \
             GeneratedBucketName="$generated_bucket" \
             CognitoIssuer="$issuer" \
-            CognitoAudience="$client_id"
+            CognitoAudience="$client_id" \
+            FrontendOrigin="$frontend_origin"
 }
 
 
@@ -154,6 +165,12 @@ status() {
 
     aws cloudformation describe-stacks \
         --stack-name "$APP_STACK" \
+        --region "$REGION" \
+        --query 'Stacks[0].[StackName,StackStatus]' \
+        --output text
+
+    aws cloudformation describe-stacks \
+        --stack-name "$FRONTEND_STACK" \
         --region "$REGION" \
         --query 'Stacks[0].[StackName,StackStatus]' \
         --output text
@@ -285,6 +302,149 @@ EOF
 }
 
 
+deploy_frontend() {
+    local account_id
+    account_id=$(aws sts get-caller-identity \
+        --query Account \
+        --output text)
+
+    local frontend_role_arn
+    frontend_role_arn="arn:aws:iam::${account_id}:role/commandlog-dev-frontend-cloudformation-role"
+
+    local generated_bucket
+    generated_bucket=$(stack_output "$DATA_STACK" GeneratedBucketName)
+
+    echo "Deploying frontend infrastructure..."
+
+    aws cloudformation deploy \
+        --template-file infrastructure/frontend.yaml \
+        --stack-name "$FRONTEND_STACK" \
+        --parameter-overrides \
+            EnvironmentName=dev \
+            GeneratedBucketName="$generated_bucket" \
+        --role-arn "$frontend_role_arn" \
+        --region "$REGION"
+}
+
+
+frontend_test() {
+    local web_bucket
+    local generated_bucket
+    local cf_domain
+
+    web_bucket=$(stack_output "$FRONTEND_STACK" WebBucketName)
+    generated_bucket=$(stack_output "$DATA_STACK" GeneratedBucketName)
+    cf_domain=$(stack_output "$FRONTEND_STACK" DistributionDomainName)
+
+    local tmp_index
+    local tmp_data
+
+    tmp_index=$(mktemp)
+    tmp_data=$(mktemp)
+
+    trap 'rm -f "$tmp_index" "$tmp_data"' RETURN
+
+    echo '<h1>CommandLog dev frontend</h1>' > "$tmp_index"
+    echo '{"source":"generated-bucket","ok":true}' > "$tmp_data"
+
+    aws s3 cp \
+        "$tmp_data" \
+        "s3://${generated_bucket}/data/cloudfront-test.json" \
+        --content-type "application/json" \
+        --region "$REGION" \
+        >/dev/null
+
+    check_status() {
+        local name="$1"
+        local url="$2"
+        local expected="$3"
+
+        local actual
+        actual=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+
+        if [[ "$actual" == "$expected" ]]; then
+            printf "PASS  %-28s expected=%s actual=%s\n" \
+                "$name" "$expected" "$actual"
+        else
+            printf "FAIL  %-28s expected=%s actual=%s\n" \
+                "$name" "$expected" "$actual"
+            return 1
+        fi
+    }
+
+    check_status \
+        "web bucket direct" \
+        "https://${web_bucket}.s3.ca-central-1.amazonaws.com/index.html" \
+        "403"
+
+    check_status \
+        "CloudFront frontend" \
+        "https://${cf_domain}/" \
+        "200"
+
+    check_status \
+        "CloudFront generated data" \
+        "https://${cf_domain}/data/cloudfront-test.json" \
+        "200"
+
+    check_status \
+        "generated bucket direct" \
+        "https://${generated_bucket}.s3.ca-central-1.amazonaws.com/data/cloudfront-test.json" \
+        "403"
+
+    echo
+    echo "Frontend tests passed."
+}
+
+
+cors_test() {
+    local cf_domain
+    local api_url
+
+    cf_domain=$(stack_output "$FRONTEND_STACK" DistributionDomainName)
+    api_url=$(stack_output "$APP_STACK" HttpApiUrl)
+
+    echo "=== Allowed origin ==="
+
+    local allowed_headers
+    allowed_headers=$(curl -si \
+        -X OPTIONS \
+        -H "Origin: https://${cf_domain}" \
+        -H "Access-Control-Request-Method: GET" \
+        -H "Access-Control-Request-Headers: authorization" \
+        "${api_url%/}/decks")
+
+    if echo "$allowed_headers" | grep -qi \
+        "access-control-allow-origin: https://${cf_domain}"; then
+        echo "PASS  CloudFront origin allowed"
+    else
+        echo "FAIL  CloudFront origin not allowed"
+        return 1
+    fi
+
+    echo
+    echo "=== Rejected origin ==="
+
+    local rejected_headers
+    rejected_headers=$(curl -si \
+        -X OPTIONS \
+        -H "Origin: https://evil.example.com" \
+        -H "Access-Control-Request-Method: GET" \
+        "${api_url%/}/decks")
+
+    if echo "$rejected_headers" | grep -qi \
+        "access-control-allow-origin: https://evil.example.com"; then
+        echo "FAIL  unexpected origin allowed"
+        return 1
+    else
+        echo "PASS  unexpected origin rejected"
+    fi
+
+    echo
+    echo "CORS tests passed."
+}
+
+
 help() {
     cat <<'HELP'
 CommandLog development commands
@@ -293,15 +453,18 @@ Usage:
   dev <command>
 
 Commands:
-  validate       Validate app and data templates
-  build          Build the SAM application
-  deploy         Validate, build, and deploy the dev app stack
-  data-deploy    Deploy/update the dev data stack
-  routes         List deployed dev HTTP API routes
-  status         Show dev CloudFormation stack statuses
-  events         Show deployed background event configuration
-  events-test    Test background EventBridge routing rules
-  help           Show this help
+  validate          Validate app and data templates
+  build             Build the SAM application
+  deploy            Validate, build, and deploy the dev app stack
+  data-deploy       Deploy/update the dev data stack
+  routes            List deployed dev HTTP API routes
+  status            Show dev CloudFormation stack statuses
+  events            Show deployed background event configuration
+  events-test       Test background EventBridge routing rules
+  frontend-deploy   Deploy/update the dev frontend hosting stack
+  frontend-test     Test private S3 + CloudFront routing
+  cors-test         Test API CORS against the dev frontend origin
+  help              Show this help
 HELP
 }
 
@@ -330,6 +493,15 @@ case "${1:-help}" in
         ;;
     events-test)
         events_test
+        ;;
+    frontend-deploy)
+        deploy_frontend
+        ;;
+    frontend-test)
+        frontend_test
+        ;;
+    cors-test)
+        cors_test
         ;;
     help|-h|--help)
         help
