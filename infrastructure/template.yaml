@@ -71,6 +71,10 @@ Parameters:
     Type: String
     Description: Cognito app client ID accepted by the JWT authorizer
 
+  FrontendOrigin:
+    Type: String
+    Description: Browser origin allowed to call the CommandLog API
+
 Globals:
   Function:
     CodeUri: ../backend/
@@ -86,10 +90,30 @@ Resources:
   CommandLogHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
-      Name: !Sub commandlog-${AppEnvironment}-api
       StageName: $default
       FailOnWarnings: true
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title: !Sub commandlog-${AppEnvironment}-api
+          version: '1.0'
+        paths: {}
+
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref FrontendOrigin
+        AllowHeaders:
+          - authorization
+          - content-type
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - OPTIONS
+        MaxAge: 300
+
       Auth:
+        DefaultAuthorizer: CommandLogJwtAuthorizer
         Authorizers:
           CommandLogJwtAuthorizer:
             IdentitySource: $request.header.Authorization
@@ -97,7 +121,6 @@ Resources:
               issuer: !Ref CognitoIssuer
               audience:
                 - !Ref CognitoAudience
-        DefaultAuthorizer: CommandLogJwtAuthorizer
 
   ListDecksFunction:
     Type: AWS::Serverless::Function
