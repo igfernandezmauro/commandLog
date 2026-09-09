@@ -39,48 +39,48 @@ jobs:
         - name: Run CI checks
           run: ./scripts/dev ci
 
-    deploy-development:
-      name: Deploy development
-      needs: ci
+  deploy-development:
+    name: Deploy development
+    needs: ci
 
-      if: >-
-        github.ref == 'refs/heads/develop' ||
-        github.ref == 'refs/heads/feature/cd-development'
+    if: >-
+      github.ref == 'refs/heads/develop' ||
+      github.ref == 'refs/heads/feature/cd-development'
 
-      runs-on: ubuntu-latest
-      environment: development
+    runs-on: ubuntu-latest
+    environment: development
 
-      permissions:
-        contents: read
-        id-token: write
+    permissions:
+      contents: read
+      id-token: write
 
-      concurrency:
-        group: commandlog-development
-        cancel-in-progress: false
+    concurrency:
+      group: commandlog-development
+      cancel-in-progress: false
 
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v7
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
 
-        - name: Set up Python
-          uses: actions/setup-python@v7
-          with:
-            python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
 
-        - name: Configure AWS credentials
-          uses: aws-actions/configure-aws-credentials@v6.2.3
-          with:
-            role-to-assume: arn:aws:iam::280535250460:role/commandlog-dev-github-deploy-role
-            aws-region: ca-central-1
-            allowed-account-ids: "280535250460"
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::280535250460:role/commandlog-dev-github-deploy-role
+          aws-region: ca-central-1
+          allowed-account-ids: "280535250460"
 
-        - name: Set up AWS SAM CLI
-          uses: aws-actions/setup-sam@v3
-          with:
-            use-installer: true
-            token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v3
+        with:
+          use-installer: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-        - name: Deploy and verify development
-          env:
-            COMMANDLOG_DEV_PASSWORD: ${{ secrets.COMMANDLOG_DEV_PASSWORD }}
-          run: ./scripts/dev deploy-dev
+      - name: Deploy and verify development
+        env:
+          COMMANDLOG_DEV_PASSWORD: ${{ secrets.COMMANDLOG_DEV_PASSWORD }}
+        run: ./scripts/dev deploy-dev
