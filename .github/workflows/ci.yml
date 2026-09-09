@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
     push:
@@ -44,8 +44,7 @@ jobs:
     needs: ci
 
     if: >-
-      github.ref == 'refs/heads/develop' ||
-      github.ref == 'refs/heads/feature/cd-development'
+      github.ref == 'refs/heads/develop'
 
     runs-on: ubuntu-latest
     environment: development
