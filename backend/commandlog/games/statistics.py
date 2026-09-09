@@ -165,10 +165,19 @@ def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: 
         "wins": 0,
         "losses": 0,
         "draws": 0,
+
         "turns": 0,
+        "turns_count": 0,
+
         "mulligans": 0,
+        "mulligans_count": 0,
+
         "mld": 0,
+        "mld_count": 0,
+
         "feeling": 0,
+        "feeling_count": 0,
+
         "first_played": None,
         "last_played": None,
     }
@@ -192,10 +201,19 @@ def build_version_stats(games: list[dict[str, Any]], *, user_key: str, deck_id: 
                 "wins": 0,
                 "losses": 0,
                 "draws": 0,
+
                 "turns": 0,
+                "turns_count": 0,
+
                 "mulligans": 0,
+                "mulligans_count": 0,
+
                 "mld": 0,
+                "mld_count": 0,
+
                 "feeling": 0,
+                "feeling_count": 0,
+
                 "first_played_at": None,
                 "last_played_at": None,
             },

@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
 REGION="${AWS_REGION:-ca-central-1}"
 
 APP_STACK="commandlog-dev-app"
@@ -150,6 +153,65 @@ routes() {
 }
 
 
+routes_test() {
+    local api_id
+    api_id=$(stack_output "$APP_STACK" HttpApiId)
+
+    local actual
+    local expected
+
+    actual=$(
+        aws apigatewayv2 get-routes \
+            --api-id "$api_id" \
+            --region "$REGION" \
+            --query 'Items[].[RouteKey,AuthorizationType]' \
+            --output text \
+        | awk '{
+            auth=$NF
+            $NF=""
+            sub(/[[:space:]]+$/, "")
+            print $0 "|" auth
+        }' \
+        | sort
+    )
+
+    expected=$(
+        cat <<'EOF' | sort
+GET /decks|JWT
+GET /decks/{deck_id}|JWT
+GET /decks/{deck_id}/diff|JWT
+GET /games|JWT
+GET /me/profile|JWT
+GET /pick|JWT
+GET /stats/summary|JWT
+GET /stats/version|JWT
+POST /play|JWT
+PUT /me/profile|JWT
+EOF
+    )
+
+    echo "=== HTTP API route tests ==="
+    echo
+
+    if [[ "$actual" == "$expected" ]]; then
+        printf "PASS  expected route set and JWT authorization\n"
+    else
+        echo "FAIL  API route configuration differs from expected."
+        echo
+
+        diff -u \
+            <(printf '%s\n' "$expected") \
+            <(printf '%s\n' "$actual") \
+            || true
+
+        return 1
+    fi
+
+    echo
+    echo "HTTP API route tests passed."
+}
+
+
 status() {
     aws cloudformation describe-stacks \
         --stack-name "$DATA_STACK" \
@@ -276,7 +338,7 @@ EOF
         fi
     }
 
-    echo "Testing EventBridge rule: $rule_name"
+    echo "=== Background event tests ==="
     echo
 
     test_event \
@@ -354,6 +416,13 @@ frontend_test() {
         --region "$REGION" \
         >/dev/null
 
+    aws s3 cp \
+        "$tmp_index" \
+        "s3://${web_bucket}/index.html" \
+        --content-type "text/html" \
+        --region "$REGION" \
+        >/dev/null
+
     check_status() {
         local name="$1"
         local url="$2"
@@ -372,9 +441,12 @@ frontend_test() {
         fi
     }
 
+    echo "=== Frontend tests ==="
+    echo
+
     check_status \
         "web bucket direct" \
-        "https://${web_bucket}.s3.ca-central-1.amazonaws.com/index.html" \
+        "https://${web_bucket}.s3.${REGION}.amazonaws.com/index.html" \
         "403"
 
     check_status \
@@ -389,7 +461,7 @@ frontend_test() {
 
     check_status \
         "generated bucket direct" \
-        "https://${generated_bucket}.s3.ca-central-1.amazonaws.com/data/cloudfront-test.json" \
+        "https://${generated_bucket}.s3.${REGION}.amazonaws.com/data/cloudfront-test.json" \
         "403"
 
     echo
@@ -404,7 +476,8 @@ cors_test() {
     cf_domain=$(stack_output "$FRONTEND_STACK" DistributionDomainName)
     api_url=$(stack_output "$APP_STACK" HttpApiUrl)
 
-    echo "=== Allowed origin ==="
+    echo "=== CORS tests ==="
+    echo
 
     local allowed_headers
     allowed_headers=$(curl -si \
@@ -421,9 +494,6 @@ cors_test() {
         echo "FAIL  CloudFront origin not allowed"
         return 1
     fi
-
-    echo
-    echo "=== Rejected origin ==="
 
     local rejected_headers
     rejected_headers=$(curl -si \
@@ -442,6 +512,157 @@ cors_test() {
 
     echo
     echo "CORS tests passed."
+}
+
+
+test_unit() {
+    echo "Running unit tests..."
+    python -m pytest
+}
+
+
+stack_test() {
+    local failed=0
+
+    check_stack() {
+        local stack="$1"
+
+        local actual
+        actual=$(aws cloudformation describe-stacks \
+            --stack-name "$stack" \
+            --region "$REGION" \
+            --query 'Stacks[0].StackStatus' \
+            --output text)
+
+        case "$actual" in
+            CREATE_COMPLETE|UPDATE_COMPLETE)
+                printf "PASS  %-32s %s\n" "$stack" "$actual"
+                ;;
+            *)
+                printf "FAIL  %-32s %s\n" "$stack" "$actual"
+                failed=1
+                ;;
+        esac
+    }
+
+    echo "=== CloudFormation stack tests ==="
+    echo
+
+    check_stack "$DATA_STACK"
+    check_stack "$AUTH_STACK"
+    check_stack "$APP_STACK"
+    check_stack "$FRONTEND_STACK"
+
+    if (( failed !=0 )); then
+        return 1
+    fi
+
+    echo
+    echo "CloudFormation stack tests passed."
+}
+
+
+api_test() {
+    local api_url
+    api_url=$(stack_output "$APP_STACK" HttpApiUrl)
+
+    local client_id
+    client_id=$(stack_output "$AUTH_STACK" UserPoolClientId)
+
+    local username
+    username="${COMMANDLOG_DEV_USERNAME:-commandlog-dev@example.com}"
+
+    echo "=== HTTP API authentication tests ==="
+    echo
+
+    local unauthenticated_status
+    unauthenticated_status=$(curl -s \
+        -o /dev/null \
+        -w "%{http_code}" \
+        "${api_url%/}/decks")
+
+    if [[ "$unauthenticated_status" == "401" ]]; then
+        printf "PASS  %-28s expected=401 actual=%s\n" \
+            "unauthenticated /decks" \
+            "$unauthenticated_status"
+    else
+        printf "FAIL  %-28s expected=401 actual=%s\n" \
+            "unauthenticated /decks" \
+            "$unauthenticated_status"
+        return 1
+    fi
+
+    local id_token="${COMMANDLOG_DEV_ID_TOKEN:-}"
+
+    if [[ -z "$id_token" ]]; then
+        if [[ -z "${COMMANDLOG_DEV_PASSWORD:-}" ]]; then
+            echo
+            echo "FAIL  authenticated API test requires one of:"
+            echo "      COMMANDLOG_DEV_ID_TOKEN"
+            echo "      COMMANDLOG_DEV_PASSWORD"
+            return 1
+        fi
+
+        id_token=$(aws cognito-idp initiate-auth \
+            --region "$REGION" \
+            --client-id "$client_id" \
+            --auth-flow USER_PASSWORD_AUTH \
+            --auth-parameters \
+                USERNAME="$username",PASSWORD="$COMMANDLOG_DEV_PASSWORD" \
+            --query 'AuthenticationResult.IdToken' \
+            --output text)
+    fi
+
+    local authenticated_status
+    authenticated_status=$(curl -s \
+        -o /dev/null \
+        -w "%{http_code}" \
+        -H "Authorization: Bearer ${id_token}" \
+        "${api_url%/}/decks")
+
+    if [[ "$authenticated_status" == "200" ]]; then
+        printf "PASS  %-28s expected=200 actual=%s\n" \
+            "authenticated /decks" \
+            "$authenticated_status"
+    else
+        printf "FAIL  %-28s expected=200 actual=%s\n" \
+            "authenticated /decks" \
+            "$authenticated_status"
+        return 1
+    fi
+
+    echo
+    echo "HTTP API authentication tests passed."
+}
+
+
+smoke_test() {
+    echo "========================================"
+    echo " CommandLog dev smoke tests"
+    echo "========================================"
+    echo
+
+    stack_test
+
+    echo
+    routes_test
+
+    echo
+    events_test
+
+    echo
+    frontend_test
+
+    echo
+    cors_test
+
+    echo
+    api_test
+
+    echo
+    echo "========================================"
+    echo " All dev smoke tests passed."
+    echo "========================================"
 }
 
 
@@ -464,6 +685,11 @@ Commands:
   frontend-deploy   Deploy/update the dev frontend hosting stack
   frontend-test     Test private S3 + CloudFront routing
   cors-test         Test API CORS against the dev frontend origin
+  test              Run fast local unit tests
+  stack-test        Verify deployed CloudFormation stacks are healthy
+  routes-test       Verify the deployed HTTP API route configuration
+  api-test          Verify authenticated and unauthenticated API access
+  smoke-test        Run all deployed dev smoke tests
   help              Show this help
 HELP
 }
@@ -502,6 +728,21 @@ case "${1:-help}" in
         ;;
     cors-test)
         cors_test
+        ;;
+    test)
+        test_unit
+        ;;
+    stack-test)
+        stack_test
+        ;;
+    routes-test)
+        routes_test
+        ;;
+    api-test)
+        api_test
+        ;;
+    smoke-test)
+        smoke_test
         ;;
     help|-h|--help)
         help
