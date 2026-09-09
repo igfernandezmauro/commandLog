@@ -91,6 +91,8 @@ def sync_archidekt_user(user_key: str, username: str, *, dry_run: bool = False) 
 
         previous = get_current_deck(user_key, deck_id)
 
+        raw_key = previous.get("raw_s3_key") if previous else None
+
         previous_hash = previous.get("list_hash") if previous else None
 
         previous_main = previous.get("main") if previous else None
@@ -107,6 +109,7 @@ def sync_archidekt_user(user_key: str, username: str, *, dry_run: bool = False) 
 
             if not dry_run:
                 save_snapshot(snapshot_key, deck_json)
+                raw_key = snapshot_key
 
                 metadata = archidekt.get_metadata(deck_json)
 
@@ -141,7 +144,7 @@ def sync_archidekt_user(user_key: str, username: str, *, dry_run: bool = False) 
                 run_ts=run_timestamp,
                 list_hash=list_hash,
                 main=main,
-                raw_key=snapshot_key
+                raw_key=raw_key
             )
 
         processed += 1
