@@ -703,6 +703,30 @@ ci() {
 }
 
 
+deploy_dev() {
+    echo "========================================"
+    echo " Deploying CommandLog development"
+    echo "========================================"
+    echo
+
+    deploy_data
+
+    echo
+    deploy_frontend
+
+    echo
+    deploy_app
+
+    echo
+    smoke_test
+
+    echo
+    echo "========================================"
+    echo " Development deployment passed."
+    echo "========================================"
+}
+
+
 help() {
     cat <<'HELP'
 CommandLog development commands
@@ -729,6 +753,7 @@ Commands:
   smoke-test        Run all deployed dev smoke tests
   lint              Lint infrastructure templates without AWS access
   ci                Run all local CI checks
+  deploy-dev        Deploy the complete dev environment and run smoke tests
   help              Show this help
 HELP
 }
@@ -788,6 +813,9 @@ case "${1:-help}" in
         ;;
     ci)
         ci
+        ;;
+    deploy-dev)
+        deploy_dev
         ;;
     help|-h|--help)
         help
