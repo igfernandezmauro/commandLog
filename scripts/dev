@@ -666,6 +666,43 @@ smoke_test() {
 }
 
 
+lint_templates() {
+    echo "Linting infrastructure templates..."
+
+    cfn-lint \
+        --non-zero-exit-code error \
+        -r "$REGION" \
+        -t \
+        infrastructure/template.yaml \
+        infrastructure/data.yaml \
+        infrastructure/auth.yaml \
+        infrastructure/frontend.yaml
+
+    echo "Infrastructure linting passed."
+}
+
+
+ci() {
+    echo "========================================"
+    echo " CommandLog CI checks"
+    echo "========================================"
+    echo
+
+    test_unit
+
+    echo
+    lint_templates
+
+    echo
+    build
+
+    echo
+    echo "========================================"
+    echo " All CI checks passed."
+    echo "========================================"
+}
+
+
 help() {
     cat <<'HELP'
 CommandLog development commands
@@ -690,6 +727,8 @@ Commands:
   routes-test       Verify the deployed HTTP API route configuration
   api-test          Verify authenticated and unauthenticated API access
   smoke-test        Run all deployed dev smoke tests
+  lint              Lint infrastructure templates without AWS access
+  ci                Run all local CI checks
   help              Show this help
 HELP
 }
@@ -743,6 +782,12 @@ case "${1:-help}" in
         ;;
     smoke-test)
         smoke_test
+        ;;
+    lint)
+        lint_templates
+        ;;
+    ci)
+        ci
         ;;
     help|-h|--help)
         help
