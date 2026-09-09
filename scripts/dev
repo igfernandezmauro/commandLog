@@ -275,7 +275,7 @@ events() {
 }
 
 
-events_test() {
+events_test() (
     local raw_bucket
     raw_bucket=$(stack_output "$DATA_STACK" RawBucketName)
 
@@ -283,7 +283,7 @@ events_test() {
     local pattern_file
     pattern_file=$(mktemp)
 
-    trap 'rm -f "$pattern_file"' RETURN
+    trap 'rm -f "$pattern_file"' EXIT
 
     aws events describe-rule \
         --name "$rule_name" \
@@ -361,7 +361,7 @@ EOF
 
     echo
     echo "Background event tests passed."
-}
+)
 
 
 deploy_frontend() {
@@ -389,7 +389,7 @@ deploy_frontend() {
 }
 
 
-frontend_test() {
+frontend_test() (
     local web_bucket
     local generated_bucket
     local cf_domain
@@ -404,7 +404,7 @@ frontend_test() {
     tmp_index=$(mktemp)
     tmp_data=$(mktemp)
 
-    trap 'rm -f "$tmp_index" "$tmp_data"' RETURN
+    trap 'rm -f "$tmp_index" "$tmp_data"' EXIT
 
     echo '<h1>CommandLog dev frontend</h1>' > "$tmp_index"
     echo '{"source":"generated-bucket","ok":true}' > "$tmp_data"
@@ -466,7 +466,7 @@ frontend_test() {
 
     echo
     echo "Frontend tests passed."
-}
+)
 
 
 cors_test() {
