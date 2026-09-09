@@ -1,0 +1,40 @@
+name: CI
+
+on:
+    push:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ci-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    ci:
+        name: Test, lint, build
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
+
+            - name: Set up Python
+              uses: actions/setup-python@v7
+              with:
+                python-version: "3.11"
+                cache: pip
+                cache-dependency-path: backend/requirements-dev.txt
+
+            - name: Install development dependencies
+              run: python -m pip install -r backend/requirements-dev.txt
+
+            - name: Set up AWS SAM CLI
+              uses: aws-actions/setup-sam@v3
+              with:
+                use-installer: true
+                token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Run CI checks
+              run: ./scripts/dev ci  
