@@ -97,6 +97,7 @@ deploy_app() {
     frontend_origin="https://$(stack_output "$FRONTEND_STACK" DistributionDomainName)"
 
     sam deploy \
+        --no-fail-on-empty-changeset \
         --template-file "$(pwd)/.aws-sam/build/template.yaml" \
         --stack-name "$APP_STACK" \
         --region "$REGION" \
