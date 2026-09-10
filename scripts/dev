@@ -677,7 +677,8 @@ lint_templates() {
         infrastructure/template.yaml \
         infrastructure/data.yaml \
         infrastructure/auth.yaml \
-        infrastructure/frontend.yaml
+        infrastructure/frontend.yaml \
+        infrastructure/production-storage.yaml
 
     echo "Infrastructure linting passed."
 }
