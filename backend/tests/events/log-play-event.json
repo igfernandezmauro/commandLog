@@ -1,0 +1,15 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /play",
+  "rawPath": "/play",
+  "requestContext": {
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "local-user"
+        }
+      }
+    }
+  },
+  "body": "{\"deck_id\":\"deck-alora\",\"result\":\"WIN\",\"opponents_commanders\":[\"Atraxa, Praetors' Voice\",\"Edgar Markov\",\"Muldrotha, the Gravetide\"],\"opponents_commanders_ids\":[\"atraxa\",\"edgar\",\"muldrotha\"],\"store\":\"Local Game Store\",\"turn_order\":2,\"mulligans\":1,\"notes\":\"Local integration test\",\"metrics\":{\"turns\":9,\"missed_land_drops\":1,\"feeling\":4}}"
+}

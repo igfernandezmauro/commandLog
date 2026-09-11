@@ -1,0 +1,18 @@
+{
+  "version": "2.0",
+  "routeKey": "PUT /me/profile",
+  "rawPath": "/me/profile",
+  "requestContext": {
+    "http": {
+      "method": "PUT"
+    },
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "local-user"
+        }
+      }
+    }
+  },
+  "body": "{\"archidekt_username\":\"local-archidekt-user\",\"ingestion_enabled\":true,\"source\":\"archidekt\"}"
+}

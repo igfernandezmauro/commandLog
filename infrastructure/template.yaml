@@ -1,0 +1,609 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: CommandLog application stack
+
+Parameters:
+  AppEnvironment:
+    Type: String
+    Default: local
+    AllowedValues:
+      - local
+      - dev
+      - prod
+
+  DeckStateTableName:
+    Type: String
+    Default: commandlog_local_deck_state
+
+  PlayEventsTableName:
+    Type: String
+    Default: commandlog_local_play_events
+
+  UserProfileTableName:
+    Type: String
+    Default: commandlog_local_user_profile
+
+  DeckChangeLogTableName:
+    Type: String
+    Default: commandlog_local_deck_change_log
+
+  DeckDiffTableName:
+    Type: String
+    Default: commandlog_local_deck_diffs
+
+  CardsDimTableName:
+    Type: String
+    Default: commandlog_local_cards_dim
+
+  SnapshotBucketName:
+    Type: String
+    Default: commandlog-local-snapshots
+
+  RawBucketName:
+    Type: String
+    Default: commandlog-local-raw
+
+  GeneratedBucketName:
+    Type: String
+    Default: commandlog-local-generated
+
+  AwsEndpointUrl:
+    Type: String
+    Default: ""
+
+  ArchidektFixtureDir:
+    Type: String
+    Default: ""
+
+  InvokeIngestOnSave:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+
+  CognitoIssuer:
+    Type: String
+    Description: JWT issuer URL for the environment Cognito User Pool
+
+  CognitoAudience:
+    Type: String
+    Description: Cognito app client ID accepted by the JWT authorizer
+
+  FrontendOrigin:
+    Type: String
+    Description: Browser origin allowed to call the CommandLog API
+
+  BackgroundAutomationState:
+    Type: String
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+    Description: Controls CommandLog background schedules and event-driven ingestion
+
+Globals:
+  Function:
+    CodeUri: ../backend/
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        APP_ENV: !Ref AppEnvironment
+        AWS_ENDPOINT_URL: !Ref AwsEndpointUrl
+
+Resources:
+  CommandLogHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      FailOnWarnings: true
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title: !Sub commandlog-${AppEnvironment}-api
+          version: '1.0'
+        paths: {}
+
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref FrontendOrigin
+        AllowHeaders:
+          - authorization
+          - content-type
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - OPTIONS
+        MaxAge: 300
+
+      Auth:
+        DefaultAuthorizer: CommandLogJwtAuthorizer
+        Authorizers:
+          CommandLogJwtAuthorizer:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              issuer: !Ref CognitoIssuer
+              audience:
+                - !Ref CognitoAudience
+
+  ListDecksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-list-decks
+      Handler: functions.list_decks.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          STATE_TABLE: !Ref DeckStateTableName
+          USERS_TABLE: !Ref UserProfileTableName
+      Policies:
+        - Statement:
+          - Sid: ReadUserProfile
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+          - Sid: QueryDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+      Events:
+        ListDecks:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /decks
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  GetGamesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-get-games
+      Handler: functions.get_games.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+      Policies:
+        - Statement:
+          - Sid: QueryPlayEvents
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        GetGames:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /games
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  LogPlayEventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-log-play-event
+      Handler: functions.log_play_event.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+          STATE_TABLE: !Ref DeckStateTableName
+      Policies:
+        - Statement:
+          - Sid: ReadAndUpdateDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: WritePlayEvent
+            Effect: Allow
+            Action:
+              - dynamodb:PutItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        LogPlayEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /play
+            Method: POST
+            PayloadFormatVersion: "2.0"
+
+  StatsSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-stats-summary
+      Handler: functions.stats_summary.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+      Policies:
+        - Statement:
+          - Sid: QueryPlayEvents
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        StatsSummary:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /stats/summary
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  StatsVersionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-stats-version
+      Handler: functions.stats_version.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+      Policies:
+        - Statement:
+          - Sid: QueryPlayEvents
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        StatsVersion:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /stats/version
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  GetRandomDecksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-get-random-decks
+      Handler: functions.get_random_decks.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          STATE_TABLE: !Ref DeckStateTableName
+          PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
+          USERS_TABLE: !Ref UserProfileTableName
+      Policies:
+        - Statement:
+          - Sid: ReadUserProfile
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+          - Sid: QueryDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: QueryPlayEvents
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PlayEventsTableName}
+      Events:
+        GetRandomDecks:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /pick
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  DeckVersionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-deck-versions
+      Handler: functions.deck_versions.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          CHANGE_LOG_TABLE: !Ref DeckChangeLogTableName
+          STATE_TABLE: !Ref DeckStateTableName
+      Policies:
+        - Statement:
+          - Sid: ReadDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: QueryDeckHistory
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+      Events:
+        DeckVersions:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /decks/{deck_id}
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  GetDiffFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-get-diff
+      Handler: functions.get_diff.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 20
+      Environment:
+        Variables:
+          CHANGE_LOG_TABLE: !Ref DeckChangeLogTableName
+          DECK_DIFF_TABLE: !Ref DeckDiffTableName
+          STATE_TABLE: !Ref DeckStateTableName
+          CARDS_DIM_TABLE: !Ref CardsDimTableName
+          SNAPSHOT_BUCKET: !Ref SnapshotBucketName
+      Policies:
+        - Statement:
+          - Sid: ReadDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: QueryDeckHistory
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+          - Sid: ReadWriteDiffCache
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckDiffTableName}
+          - Sid: BatchReadCardDimension
+            Effect: Allow
+            Action:
+              - dynamodb:BatchGetItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
+          - Sid: ReadDeckSnapshots
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
+      Events:
+        GetDeckDiff:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /decks/{deck_id}/diff
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  SyncDecksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-sync-decks
+      Handler: functions.sync_decks.lambda_function.lambda_handler
+      MemorySize: 512
+      Timeout: 120
+      Environment:
+        Variables:
+          STATE_TABLE: !Ref DeckStateTableName
+          CHANGE_LOG_TABLE: !Ref DeckChangeLogTableName
+          USERS_TABLE: !Ref UserProfileTableName
+          BUCKET_NAME: !Ref SnapshotBucketName
+          ARCHIDEKT_FIXTURE_DIR: !Ref ArchidektFixtureDir
+      Policies:
+        - Statement:
+          - Sid: ReadUpdateDeckState
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
+          - Sid: WriteDeckHistory
+            Effect: Allow
+            Action:
+              - dynamodb:PutItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
+          - Sid: QueryEnabledProfiles
+            Effect: Allow
+            Action:
+              - dynamodb:Query
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}/index/gsi_ingestion_enabled
+          - Sid: WriteDeckSnapshots
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
+
+  ProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-profile
+      Handler: functions.profile.lambda_function.lambda_handler
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UserProfileTableName
+          INGEST_LAMBDA_NAME: !Ref SyncDecksFunction
+          INVOKE_INGEST_ON_SAVE: !Ref InvokeIngestOnSave
+      Policies:
+        - Statement:
+          - Sid: ReadWriteUserProfile
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
+          - Sid: InvokeDeckSync
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              - !GetAtt SyncDecksFunction.Arn
+      Events:
+        GetProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /me/profile
+            Method: GET
+            PayloadFormatVersion: "2.0"
+        PutProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /me/profile
+            Method: PUT
+            PayloadFormatVersion: "2.0"
+
+  ScryfallLoadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-scryfall-load
+      Handler: functions.scryfall_load.lambda_function.lambda_handler
+      MemorySize: 1024
+      Timeout: 600
+      Environment:
+        Variables:
+          RAW_BUCKET: !Ref RawBucketName
+          CARDS_DIM_TABLE: !Ref CardsDimTableName
+      Policies:
+        - Statement:
+          - Sid: ReadScryfallBulkData
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
+          - Sid: WriteCardsDimension
+            Effect: Allow
+            Action:
+              - dynamodb:BatchWriteItem
+            Resource:
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CardsDimTableName}
+      Events:
+        LatestOracleCardsCreated:
+          Type: EventBridgeRule
+          Properties:
+            RuleName: !Sub commandlog-${AppEnvironment}-scryfall-latest-created
+            State: !Ref BackgroundAutomationState
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - Object Created
+              detail:
+                bucket:
+                  name:
+                    - !Ref RawBucketName
+                object:
+                  key:
+                    - scryfall/oracle_cards/latest.jsonl.gz
+
+  ScryfallDownloadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-scryfall-download
+      Handler: functions.scryfall_download.lambda_function.lambda_handler
+      MemorySize: 1024
+      Timeout: 120
+      Environment:
+        Variables:
+          RAW_BUCKET: !Ref RawBucketName
+      Policies:
+        - Statement:
+          - Sid: ManageScryfallBulkObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:AbortMultipartUpload
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${RawBucketName}/scryfall/oracle_cards/*
+      Events:
+        ScryfallSync:
+          Type: ScheduleV2
+          Properties:
+            Name: !Sub commandlog-${AppEnvironment}-scryfall-sync
+            Description: Download current Scryfall Oracle Cards bulk data
+            ScheduleExpression: rate(30 days)
+            FlexibleTimeWindow:
+              Mode: "OFF"
+            State: !Ref BackgroundAutomationState
+
+  BuildCommandersIndexFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub commandlog-${AppEnvironment}-build-commanders-index
+      Handler: functions.build_commanders_index.lambda_function.lambda_handler
+      MemorySize: 3008
+      Timeout: 900
+      Environment:
+        Variables:
+          FRONTEND_BUCKET: !Ref GeneratedBucketName
+          COMMANDERS_INDEX_KEY: data/commanders_index.json
+      Policies:
+        - Statement:
+          - Sid: WriteCommanderIndex
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${GeneratedBucketName}/data/commanders_index.json
+      Events:
+        CommandersIndex:
+          Type: ScheduleV2
+          Properties:
+            Name: !Sub commandlog-${AppEnvironment}-commanders-index
+            Description: Rebuild the Commanders index
+            ScheduleExpression: rate(30 days)
+            FlexibleTimeWindow:
+              Mode: "OFF"
+            State: !Ref BackgroundAutomationState
+
+Outputs:
+  HttpApiId:
+    Value: !Ref CommandLogHttpApi
+
+  HttpApiUrl:
+    Value: !Sub https://${CommandLogHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}

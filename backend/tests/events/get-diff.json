@@ -1,0 +1,21 @@
+{
+  "version": "2.0",
+  "routeKey": "GET /decks/{deck_id}/diff",
+  "rawPath": "/decks/deck-alora/diff",
+  "pathParameters": {
+    "deck_id": "deck-alora"
+  },
+  "queryStringParameters": {
+    "baseDate": "2026-06-01T12:00:00Z",
+    "compareDate": "2026-08-01T15:00:00Z"
+  },
+  "requestContext": {
+    "authorizer": {
+      "jwt": {
+        "claims": {
+          "sub": "local-user"
+        }
+      }
+    }
+  }
+}

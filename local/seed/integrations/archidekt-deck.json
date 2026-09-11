@@ -1,0 +1,39 @@
+{
+  "id": 424242,
+  "name": "Local Archidekt Test Deck",
+  "createdAt": "2026-08-01T12:00:00Z",
+  "updatedAt": "2026-08-10T18:00:00Z",
+  "featured": "https://example.com/archidekt-featured.jpg",
+  "cards": [
+    {
+      "quantity": 1,
+      "categories": ["Commander"],
+      "card": {
+        "oracleCard": {
+          "uid": "11111111-aaaa-bbbb-cccc-111111111111",
+          "name": "Kadena, Slinking Sorcerer"
+        }
+      }
+    },
+    {
+      "quantity": 1,
+      "categories": ["Creature"],
+      "card": {
+        "oracleCard": {
+          "uid": "22222222-aaaa-bbbb-cccc-222222222222",
+          "name": "Icefeather Aven"
+        }
+      }
+    },
+    {
+      "quantity": 1,
+      "categories": ["Creature"],
+      "card": {
+        "oracleCard": {
+          "uid": "33333333-aaaa-bbbb-cccc-333333333333",
+          "name": "Den Protector"
+        }
+      }
+    }
+  ]
+}

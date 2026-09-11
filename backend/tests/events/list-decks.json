@@ -1,0 +1,14 @@
+{
+    "version": "2.0",
+    "routeKey": "GET /decks",
+    "rawPath": "/decks",
+    "requestContext": {
+        "authorizer": {
+            "jwt": {
+                "claims": {
+                    "sub": "local-user"
+                }
+            }
+        }
+    }
+}
