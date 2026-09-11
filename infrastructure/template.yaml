@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: CommandLog local development foundation
+Description: CommandLog application stack
 
 Parameters:
   AppEnvironment:
@@ -42,11 +42,11 @@ Parameters:
 
   RawBucketName:
     Type: String
-    Default: commandlog-local-snapshots
+    Default: commandlog-local-raw
 
   GeneratedBucketName:
     Type: String
-    Default: commandlog-local-frontend
+    Default: commandlog-local-generated
 
   AwsEndpointUrl:
     Type: String
@@ -74,6 +74,14 @@ Parameters:
   FrontendOrigin:
     Type: String
     Description: Browser origin allowed to call the CommandLog API
+
+  BackgroundAutomationState:
+    Type: String
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+    Description: Controls CommandLog background schedules and event-driven ingestion
 
 Globals:
   Function:
@@ -224,7 +232,7 @@ Resources:
       FunctionName: !Sub commandlog-${AppEnvironment}-stats-summary
       Handler: functions.stats_summary.lambda_function.lambda_handler
       MemorySize: 128
-      Timeout: 3
+      Timeout: 10
       Environment:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
@@ -251,7 +259,7 @@ Resources:
       FunctionName: !Sub commandlog-${AppEnvironment}-stats-version
       Handler: functions.stats_version.lambda_function.lambda_handler
       MemorySize: 128
-      Timeout: 3
+      Timeout: 10
       Environment:
         Variables:
           PLAY_EVENTS_TABLE: !Ref PlayEventsTableName
@@ -278,7 +286,7 @@ Resources:
       FunctionName: !Sub commandlog-${AppEnvironment}-get-random-decks
       Handler: functions.get_random_decks.lambda_function.lambda_handler
       MemorySize: 128
-      Timeout: 3
+      Timeout: 10
       Environment:
         Variables:
           STATE_TABLE: !Ref DeckStateTableName
@@ -497,7 +505,7 @@ Resources:
       Timeout: 600
       Environment:
         Variables:
-          RAW_BUCKET: !Ref SnapshotBucketName
+          RAW_BUCKET: !Ref RawBucketName
           CARDS_DIM_TABLE: !Ref CardsDimTableName
       Policies:
         - Statement:
@@ -518,7 +526,7 @@ Resources:
           Type: EventBridgeRule
           Properties:
             RuleName: !Sub commandlog-${AppEnvironment}-scryfall-latest-created
-            State: ENABLED
+            State: !Ref BackgroundAutomationState
             Pattern:
               source:
                 - aws.s3
@@ -541,7 +549,7 @@ Resources:
       Timeout: 120
       Environment:
         Variables:
-          RAW_BUCKET: !Ref SnapshotBucketName
+          RAW_BUCKET: !Ref RawBucketName
       Policies:
         - Statement:
           - Sid: ManageScryfallBulkObjects
@@ -561,7 +569,7 @@ Resources:
             ScheduleExpression: rate(30 days)
             FlexibleTimeWindow:
               Mode: "OFF"
-            State: ENABLED
+            State: !Ref BackgroundAutomationState
 
   BuildCommandersIndexFunction:
     Type: AWS::Serverless::Function
@@ -581,7 +589,7 @@ Resources:
             Action:
               - s3:PutObject
             Resource:
-              - !Sub arn:${AWS::Partition}:s3:::${GeneratedBucketName}/data/commnaders_index.json
+              - !Sub arn:${AWS::Partition}:s3:::${GeneratedBucketName}/data/commanders_index.json
       Events:
         CommandersIndex:
           Type: ScheduleV2
@@ -591,7 +599,7 @@ Resources:
             ScheduleExpression: rate(30 days)
             FlexibleTimeWindow:
               Mode: "OFF"
-            State: ENABLED
+            State: !Ref BackgroundAutomationState
 
 Outputs:
   HttpApiId:

@@ -133,3 +133,74 @@ def test_put_saves_profile_without_starting_ingestion(monkeypatch):
 
     assert body["ingest"]["started"] is False
     assert body["ingest"]["error"] is None
+
+def test_put_preserves_existing_profile_attributes(monkeypatch):
+    existing = {
+        "user_key": "user#test-user-123",
+        "archidekt_username": "old-user",
+        "moxfield_username": "legacy-value",
+        "custom_future_field": "keep-me",
+        "ingestion_enabled": True,
+        "ingestion_enabled_key": "1",
+        "ingestion_source": "archidekt",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+    }
+
+    saved = {}
+
+    monkeypatch.setattr(
+        lambda_function,
+        "get_user_profile",
+        lambda user_key: dict(existing)
+    )
+
+    def fake_save_user_profile(item):
+        saved.update(item)
+
+    monkeypatch.setattr(
+        lambda_function,
+        "save_user_profile",
+        fake_save_user_profile
+    )
+
+    monkeypatch.setattr(
+        lambda_function,
+        "should_invoke_ingestion",
+        lambda: False
+    )
+
+    response = lambda_function.lambda_handler(
+        jwt_event(
+            method="PUT",
+            body={
+                "source": "archidekt",
+                "archidekt_username": "new-user",
+                "ingestion_enabled": False
+            }
+        ),
+        None
+    )
+
+    assert response["statusCode"] == 200
+
+    # Managed fields are updated
+    assert saved["archidekt_username"] == "new-user"
+    assert saved["ingestion_enabled"] is False
+    assert saved["ingestion_enabled_key"] == "0"
+    assert saved["ingestion_source"] == "archidekt"
+
+    # Existing creation timestamp is preserved
+    assert saved["created_at"] == "2026-01-01T00:00:00Z"
+
+    # Unrelated/legacy/future fields are untouched
+    assert saved["moxfield_username"] == "legacy-value"
+    assert saved["custom_future_field"] == "keep-me"
+
+    # Update timestamp should have been refreshed
+    assert saved["updated_at"] != existing["updated_at"]
+
+    body = response_body(response)
+
+    assert body["ingest"]["started"] is False
+    assert body["ingest"]["error"] is None
