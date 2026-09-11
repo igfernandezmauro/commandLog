@@ -729,9 +729,17 @@ deploy_dev() {
 }
 
 
-deploy_prod_candidate() {
+deploy_prod_app() {
+    local automation_state="$1"
+    local deployment_label="$2"
+
+    if [[ "$automation_state" != "ENABLED" && "$automation_state" != "DISABLED" ]]; then
+        echo "Invalid production automation state: $automation_state" >&2
+        return 1
+    fi
+
     echo "========================================"
-    echo " Deploying CommandLog production candidate"
+    echo " Deploying CommandLog ${deployment_label}"
     echo "========================================"
     echo
 
@@ -779,11 +787,10 @@ deploy_prod_candidate() {
     echo "Building application..."
     rm -rf .aws-sam
 
-    sam build \
-        --template-file infrastructure/template.yaml
+    sam build --template-file infrastructure/template.yaml
 
     echo
-    echo "Deploying production candidate..."
+    echo "Deploying ${deployment_label}..."
 
     sam deploy \
         --template-file "$(pwd)/.aws-sam/build/template.yaml" \
@@ -807,48 +814,58 @@ deploy_prod_candidate() {
             CognitoIssuer="https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_e6TWFI8D9" \
             CognitoAudience="m2p7rqmpkq838hhlum98r1msb" \
             FrontendOrigin="https://${cf_domain}" \
-            InvokeIngestOnSave=false \
-            BackgroundAutomationState=DISABLED
+            InvokeIngestionOnSave=false \
+            BackgroundAutomationState="$automation_state"
 
     echo
     echo "========================================"
-    echo " Production candidate deployment passed."
-    echo " Background automation remains DISABLED."
+    echo " ${deployment_label} deployment passed."
+    echo " Background automation: ${automation_state}."
     echo "========================================"
 }
 
 
+deploy_prod_candidate() {
+    deploy_prod_app \
+        "DISABLED" \
+        "production candidate"
+}
+
+
 activate_prod_automation() {
+    deploy_prod_app \
+        "ENABLED" \
+        "production automation activation"
+}
+
+
+deploy_prod() {
+    deploy_prod_app \
+        "ENABLED" \
+        "production"
+
+    echo
+    prod_smoke_test
+}
+
+
+prod_smoke_test() {
     echo "========================================"
-    echo " Deploying CommandLog production candidate with automations enabled"
+    echo " Running production smoke tests"
     echo "========================================"
     echo
 
-    local region="$REGION"
-
-    local snapshot_bucket
-    local raw_bucket
-    local generated_bucket
+    local api_url
     local cf_domain
-    local account_id
-    local app_role_arn
+    local http_code
+    local allowed_origin
+    local automation_state
+    local ingest_on_save
 
-    snapshot_bucket=$(
+    api_url=$(
         stack_output \
-        "commandlog-prod-storage" \
-        "SnapshotBucketName"
-    )
-
-    raw_bucket=$(
-        stack_output \
-        "commandlog-prod-storage" \
-        "RawBucketName"
-    )
-
-    generated_bucket=$(
-        stack_output \
-        "commandlog-prod-storage" \
-        "GeneratedBucketName"
+        "commandlog-prod-app" \
+        "HttpApiUrl"
     )
 
     cf_domain=$(
@@ -857,53 +874,119 @@ activate_prod_automation() {
         "DistributionDomainName"
     )
 
-    account_id=$(
-        aws sts get-caller-identity \
-        --query Account \
-        --output text
+    if [[ -z "$api_url" || "$api_url" == "None" ]]; then
+        echo "FAIL: production API URL could not be resolved." >&2
+        return 1
+    fi
+
+    if [[ -z "cf_domain" || "$cf_domain" == "None" ]]; then
+        echo "FAIL: production CloudFront domain could not be resolved." >&2
+        return 1
+    fi
+
+    echo "Production API: ${api_url}"
+    echo "Production frontend: https://${cf_domain}"
+    echo
+
+    echo "Checking production frontend..."
+
+    http_code=$(
+        curl -sS \
+            -o /dev/null \
+            -w "%{http_code}" \
+            "https://${cf_domain}/"
     )
 
-    app_role_arn="arn:aws:iam::${account_id}:role/commandlog-prod-app-cloudformation-role"
+    if [[ "$http_code" != "200" ]]; then
+        echo "FAIL: production frontend returned HTTP ${http_code}." >&2
+        return 1
+    fi
 
-    echo "Building application..."
-    rm -rf .aws-sam
-
-    sam build \
-        --template-file infrastructure/template.yaml
+    echo "PASS: production frontend returned 200."
 
     echo
-    echo "Deploying production candidate..."
+    echo "Checking authenticated API protection..."
 
-    sam deploy \
-        --template-file "$(pwd)/.aws-sam/build/template.yaml" \
-        --stack-name commandlog-prod-app \
-        --region "$region" \
-        --capabilities CAPABILITY_IAM \
-        --role-arn "$app_role_arn" \
-        --resolve-s3 \
-        --no-fail-on-empty-changeset \
-        --parameter-overrides \
-            AppEnvironment=prod \
-            DeckStateTableName=mtg_app_deck_state_v2 \
-            PlayEventsTableName=mtg_app_play_events \
-            UserProfileTableName=mtg_app_user_profile \
-            DeckChangeLogTableName=mtg_app_deck_change_log \
-            DeckDiffTableName=mtg_app_deck_diffs \
-            CardsDimTableName=mtg_app_cards_dim \
-            SnapshotBucketName="$snapshot_bucket" \
-            RawBucketName="$raw_bucket" \
-            GeneratedBucketName="$generated_bucket" \
-            CognitoIssuer="https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_e6TWFI8D9" \
-            CognitoAudience="m2p7rqmpkq838hhlum98r1msb" \
-            FrontendOrigin="https://${cf_domain}" \
-            InvokeIngestOnSave=false \
-            BackgroundAutomationState=ENABLED
+    http_code=$(
+        curl -sS \
+            -o /dev/null \
+            -w "%{http_code}" \
+            "${api_url%/}/decks"
+    )
+
+    if [[ "$http_code" != "401" ]]; then
+        echo "FAIL: unauthenticated /decks returned HTTP ${http_code}; expected 401." >&2
+        return 1
+    fi
+
+    echo "PASS: unauthenticated /decks returned 401."
+
+    echo
+    echo "Checking production CORS..."
+
+    allowed_origin=$(
+        curl -sS \
+            -D - \
+            -o /dev/null \
+            -X OPTIONS \
+            -H "Origin: https://${cf_domain}" \
+            -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: authorization" \
+            "${api_url%/}/decks" \
+        | tr -d '\r' \
+        | grep -i '^access-control-allow-origin:' \
+        | head -n 1 \
+        | cut -d ':' -f 2- \
+        | xargs
+    )
+
+    if [[ "$allowed_origin" != "https://${cf_domain}" ]]; then
+        echo "FAIL: production CORS origin mismatch." >&2
+        echo "Expected: https://${cf_domain}" >&2
+        echo "Actual:   ${allowed_origin:-<missing>}" >&2
+        return 1
+    fi
+
+    echo "PASS: production CORS origin matches frontend."
+
+    echo
+    echo "Checking production safety parameters..."
+
+    automation_state=$(
+        aws cloudformation describe-stacks \
+            --stack-name commandlog-prod-app \
+            --region "$REGION" \
+            --query "Stacks[0].Parameters[?ParameterKey=='BackgroundAutomationState'].ParameterValue | [0]" \
+            --output text
+    )
+
+    ingest_on_save=$(
+        aws cloudformation describe-stacks \
+            --stack-name commandlog-prod-app \
+            --region "$REGION" \
+            --query "Stacks[0].Parameters[?ParameterKey=='InvokeIngestOnSave'].ParameterValue | [0]" \
+            --output text
+    )
+
+    if [[ "$automation_state" != "ENABLED" ]]; then
+        echo "FAIL: BackgroundAutomationState is ${automation_state}; expected ENABLED." >&2
+        return 1
+    fi
+
+    echo "PASS: production background automation is ENABLED."
+
+    if [[ "$ingest_on_save" != "false" ]]; then
+        echo "FAIL: InvokeIngestOnSave is ${ingest_on_save}; expected false." >&2
+        return 1
+    fi
+
+    echo "PASS: profile-save ingestion remains disabled."
 
     echo
     echo "========================================"
-    echo " Production candidate deployment passed."
-    echo " Background automation remains ENABLED."
+    echo " Production smoke tests passed."
     echo "========================================"
+
 }
 
 
@@ -934,8 +1017,10 @@ Commands:
   lint                      Lint infrastructure templates without AWS access
   ci                        Run all local CI checks
   deploy-dev                Deploy the complete dev environment and run smoke tests
-  deploy-prod-candidate     Deploy the parallel production candidate with automation disabled
-  activate-prod-automation  Deploy the parallel production candidate with automation enabled
+  deploy-prod-candidate     Deploy production with background automation disabled
+  activate-prod-automation  Deploy production with background automation enabled
+  deploy-prod               Deploy the normal production application
+  prod-smoke-test           Run non-destructive production smoke tests
   help                      Show this help
 HELP
 }
@@ -1004,6 +1089,12 @@ case "${1:-help}" in
         ;;
     activate-prod-automation)
         activate_prod_automation
+        ;;
+    deploy-prod)
+        deploy_prod
+        ;;
+    prod-smoke-test)
+        prod_smoke_test
         ;;
     help|-h|--help)
         help
