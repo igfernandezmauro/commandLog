@@ -134,6 +134,7 @@ def lambda_handler(event, context):
             timestamp = now_iso()
 
             item = {
+                **existing,
                 "user_key": user_key,
                 "archidekt_username": username,
                 "ingestion_enabled": ingestion_enabled,

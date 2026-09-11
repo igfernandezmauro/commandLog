@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Production-owned S3 storage for CommandLog. Existing production DynamoDB tables and legacy storage are intentionally outside of this stack.
+
+Resources:
+  SnapshotBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub commandlog-prod-${AWS::AccountId}-${AWS::Region}-snapshots
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Project
+          Value: CommandLog
+        - Key: Environment
+          Value: prod
+        - Key: Purpose
+          Value: deck-snapshots
+
+  RawBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub commandlog-prod-${AWS::AccountId}-${AWS::Region}-raw
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+      Tags:
+        - Key: Project
+          Value: CommandLog
+        - Key: Environment
+          Value: prod
+        - Key: Purpose
+          Value: raw-ingestion
+
+  GeneratedBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub commandlog-prod-${AWS::AccountId}-${AWS::Region}-generated
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Project
+          Value: CommandLog
+        - Key: Environment
+          Value: prod
+        - Key: Purpose
+          Value: generated-data
+
+Outputs:
+  SnapshotBucketName:
+    Description: Production deck snapshot bucket
+    Value: !Ref SnapshotBucket
+
+  SnapshotBucketArn:
+    Description: Production deck snapshot bucket ARN
+    Value: !GetAtt SnapshotBucket.Arn
+
+  RawBucketName:
+    Description: Production raw ingestion bucket
+    Value: !Ref RawBucket
+
+  RawBucketArn:
+    Description: Production raw ingestion bucket ARN
+    Value: !GetAtt RawBucket.Arn
+
+  GeneratedBucketName:
+    Description: Production generated data bucket
+    Value: !Ref GeneratedBucket
+
+  GeneratedBucketArn:
+    Description: Production generated data bucket ARN
+    Value: !GetAtt GeneratedBucket.Arn

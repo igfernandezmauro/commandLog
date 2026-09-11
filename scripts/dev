@@ -677,7 +677,8 @@ lint_templates() {
         infrastructure/template.yaml \
         infrastructure/data.yaml \
         infrastructure/auth.yaml \
-        infrastructure/frontend.yaml
+        infrastructure/frontend.yaml \
+        infrastructure/production-storage.yaml
 
     echo "Infrastructure linting passed."
 }
@@ -728,6 +729,184 @@ deploy_dev() {
 }
 
 
+deploy_prod_candidate() {
+    echo "========================================"
+    echo " Deploying CommandLog production candidate"
+    echo "========================================"
+    echo
+
+    local region="$REGION"
+
+    local snapshot_bucket
+    local raw_bucket
+    local generated_bucket
+    local cf_domain
+    local account_id
+    local app_role_arn
+
+    snapshot_bucket=$(
+        stack_output \
+        "commandlog-prod-storage" \
+        "SnapshotBucketName"
+    )
+
+    raw_bucket=$(
+        stack_output \
+        "commandlog-prod-storage" \
+        "RawBucketName"
+    )
+
+    generated_bucket=$(
+        stack_output \
+        "commandlog-prod-storage" \
+        "GeneratedBucketName"
+    )
+
+    cf_domain=$(
+        stack_output \
+        "commandlog-prod-frontend" \
+        "DistributionDomainName"
+    )
+
+    account_id=$(
+        aws sts get-caller-identity \
+        --query Account \
+        --output text
+    )
+
+    app_role_arn="arn:aws:iam::${account_id}:role/commandlog-prod-app-cloudformation-role"
+
+    echo "Building application..."
+    rm -rf .aws-sam
+
+    sam build \
+        --template-file infrastructure/template.yaml
+
+    echo
+    echo "Deploying production candidate..."
+
+    sam deploy \
+        --template-file "$(pwd)/.aws-sam/build/template.yaml" \
+        --stack-name commandlog-prod-app \
+        --region "$region" \
+        --capabilities CAPABILITY_IAM \
+        --role-arn "$app_role_arn" \
+        --resolve-s3 \
+        --no-fail-on-empty-changeset \
+        --parameter-overrides \
+            AppEnvironment=prod \
+            DeckStateTableName=mtg_app_deck_state_v2 \
+            PlayEventsTableName=mtg_app_play_events \
+            UserProfileTableName=mtg_app_user_profile \
+            DeckChangeLogTableName=mtg_app_deck_change_log \
+            DeckDiffTableName=mtg_app_deck_diffs \
+            CardsDimTableName=mtg_app_cards_dim \
+            SnapshotBucketName="$snapshot_bucket" \
+            RawBucketName="$raw_bucket" \
+            GeneratedBucketName="$generated_bucket" \
+            CognitoIssuer="https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_e6TWFI8D9" \
+            CognitoAudience="m2p7rqmpkq838hhlum98r1msb" \
+            FrontendOrigin="https://${cf_domain}" \
+            InvokeIngestOnSave=false \
+            BackgroundAutomationState=DISABLED
+
+    echo
+    echo "========================================"
+    echo " Production candidate deployment passed."
+    echo " Background automation remains DISABLED."
+    echo "========================================"
+}
+
+
+activate_prod_automation() {
+    echo "========================================"
+    echo " Deploying CommandLog production candidate with automations enabled"
+    echo "========================================"
+    echo
+
+    local region="$REGION"
+
+    local snapshot_bucket
+    local raw_bucket
+    local generated_bucket
+    local cf_domain
+    local account_id
+    local app_role_arn
+
+    snapshot_bucket=$(
+        stack_output \
+        "commandlog-prod-storage" \
+        "SnapshotBucketName"
+    )
+
+    raw_bucket=$(
+        stack_output \
+        "commandlog-prod-storage" \
+        "RawBucketName"
+    )
+
+    generated_bucket=$(
+        stack_output \
+        "commandlog-prod-storage" \
+        "GeneratedBucketName"
+    )
+
+    cf_domain=$(
+        stack_output \
+        "commandlog-prod-frontend" \
+        "DistributionDomainName"
+    )
+
+    account_id=$(
+        aws sts get-caller-identity \
+        --query Account \
+        --output text
+    )
+
+    app_role_arn="arn:aws:iam::${account_id}:role/commandlog-prod-app-cloudformation-role"
+
+    echo "Building application..."
+    rm -rf .aws-sam
+
+    sam build \
+        --template-file infrastructure/template.yaml
+
+    echo
+    echo "Deploying production candidate..."
+
+    sam deploy \
+        --template-file "$(pwd)/.aws-sam/build/template.yaml" \
+        --stack-name commandlog-prod-app \
+        --region "$region" \
+        --capabilities CAPABILITY_IAM \
+        --role-arn "$app_role_arn" \
+        --resolve-s3 \
+        --no-fail-on-empty-changeset \
+        --parameter-overrides \
+            AppEnvironment=prod \
+            DeckStateTableName=mtg_app_deck_state_v2 \
+            PlayEventsTableName=mtg_app_play_events \
+            UserProfileTableName=mtg_app_user_profile \
+            DeckChangeLogTableName=mtg_app_deck_change_log \
+            DeckDiffTableName=mtg_app_deck_diffs \
+            CardsDimTableName=mtg_app_cards_dim \
+            SnapshotBucketName="$snapshot_bucket" \
+            RawBucketName="$raw_bucket" \
+            GeneratedBucketName="$generated_bucket" \
+            CognitoIssuer="https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_e6TWFI8D9" \
+            CognitoAudience="m2p7rqmpkq838hhlum98r1msb" \
+            FrontendOrigin="https://${cf_domain}" \
+            InvokeIngestOnSave=false \
+            BackgroundAutomationState=ENABLED
+
+    echo
+    echo "========================================"
+    echo " Production candidate deployment passed."
+    echo " Background automation remains ENABLED."
+    echo "========================================"
+}
+
+
 help() {
     cat <<'HELP'
 CommandLog development commands
@@ -736,26 +915,28 @@ Usage:
   dev <command>
 
 Commands:
-  validate          Validate app and data templates
-  build             Build the SAM application
-  deploy            Validate, build, and deploy the dev app stack
-  data-deploy       Deploy/update the dev data stack
-  routes            List deployed dev HTTP API routes
-  status            Show dev CloudFormation stack statuses
-  events            Show deployed background event configuration
-  events-test       Test background EventBridge routing rules
-  frontend-deploy   Deploy/update the dev frontend hosting stack
-  frontend-test     Test private S3 + CloudFront routing
-  cors-test         Test API CORS against the dev frontend origin
-  test              Run fast local unit tests
-  stack-test        Verify deployed CloudFormation stacks are healthy
-  routes-test       Verify the deployed HTTP API route configuration
-  api-test          Verify authenticated and unauthenticated API access
-  smoke-test        Run all deployed dev smoke tests
-  lint              Lint infrastructure templates without AWS access
-  ci                Run all local CI checks
-  deploy-dev        Deploy the complete dev environment and run smoke tests
-  help              Show this help
+  validate                  Validate app and data templates
+  build                     Build the SAM application
+  deploy                    Validate, build, and deploy the dev app stack
+  data-deploy               Deploy/update the dev data stack
+  routes                    List deployed dev HTTP API routes
+  status                    Show dev CloudFormation stack statuses
+  events                    Show deployed background event configuration
+  events-test               Test background EventBridge routing rules
+  frontend-deploy           Deploy/update the dev frontend hosting stack
+  frontend-test             Test private S3 + CloudFront routing
+  cors-test                 Test API CORS against the dev frontend origin
+  test                      Run fast local unit tests
+  stack-test                Verify deployed CloudFormation stacks are healthy
+  routes-test               Verify the deployed HTTP API route configuration
+  api-test                  Verify authenticated and unauthenticated API access
+  smoke-test                Run all deployed dev smoke tests
+  lint                      Lint infrastructure templates without AWS access
+  ci                        Run all local CI checks
+  deploy-dev                Deploy the complete dev environment and run smoke tests
+  deploy-prod-candidate     Deploy the parallel production candidate with automation disabled
+  activate-prod-automation  Deploy the parallel production candidate with automation enabled
+  help                      Show this help
 HELP
 }
 
@@ -817,6 +998,12 @@ case "${1:-help}" in
         ;;
     deploy-dev)
         deploy_dev
+        ;;
+    deploy-prod-candidate)
+        deploy_prod_candidate
+        ;;
+    activate-prod-automation)
+        activate_prod_automation
         ;;
     help|-h|--help)
         help
