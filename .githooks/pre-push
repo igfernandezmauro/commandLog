@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [[ "$remote_ref" == "refs/heads/main" ]]; then
+        echo "Direct pushes to main are disabled for CommandLog."
+        echo "Merge changes into develop, then promote develop to main through GitHub."
+        exit 1
+    fi
+done
