@@ -758,7 +758,9 @@ The Ur-Dragon"></textarea>
 
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
-      const API_BASE_URL = "https://api.commandlog.app";
+      const IS_LOCAL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+      const API_BASE_URL = IS_LOCAL ? "http://localhost:3000" : "https://api.commandlog.app";
       const START_KEY = "mtg_game_started_at";
       let DECKS = [];
       let ACTIVE_DIFF_DECK_ID = null;
@@ -803,7 +805,7 @@ The Ur-Dragon"></textarea>
       // Cognito Config
       const COGNITO_DOMAIN = "https://ca-central-1e6twfi8d9.auth.ca-central-1.amazoncognito.com";
       const CLIENT_ID = "m2p7rqmpkq838hhlum98r1msb";
-      const REDIRECT_URI = "https://commandlog.app/";
+      const REDIRECT_URI = IS_LOCAL ? `${window.location.origin}/` : "https://commandlog.app/";
       const SCOPES = "openid email profile";
       
       // Tabs
@@ -984,6 +986,8 @@ The Ur-Dragon"></textarea>
       }
 
       async function refreshTokensIfNeeded() {
+        if (IS_LOCAL) return;
+
         const idToken = getIdToken();
         if (isTokenValid(idToken)) return;
 
@@ -1022,6 +1026,10 @@ The Ur-Dragon"></textarea>
 
       // Use token in API calls
       async function apiFetch(url, opts = {}) {
+        if (IS_LOCAL) {
+          return fetch(url, opts);
+        }
+
         await refreshTokensIfNeeded();
 
         const token = getIdToken();
@@ -1889,23 +1897,20 @@ The Ur-Dragon"></textarea>
         `;
       }
 
-      // async function loadCardsIndex() {
-        // try {
-          // const res = await fetch("data/commanders_index.json");
-          // COMMANDERS = await res.json();
-        // } catch (err) {
-          // console.error("Failed to load cards index:", err);
-        // }
-      // }
-
       async function loadCardsIndex() {
+        if (IS_LOCAL) {
+          COMMANDERS = [];
+          return;
+        }
+
         try {
           const res = await fetch(`data/commanders_index.json?v=${Date.now()}`, {
             cache: "no-store"
           });
           COMMANDERS = await res.json();
         } catch (err) {
-          console.error("Failed to load cards index:", err);
+          console.error("Failed to load commanders index:", err);
+          COMMANDERS = [];
         }
       }
       
@@ -2296,10 +2301,15 @@ The Ur-Dragon"></textarea>
         
         const token = localStorage.getItem("id_token");
 
-        if (token) {
+        if (IS_LOCAL || token) {
           await bootstrapApp();
         } else {
           renderLoggedOutState();
+        }
+
+        if (IS_LOCAL) {
+          document.getElementById("login-btn").style.display = "none";
+          document.getElementById("logout-btn").style.display = "none";
         }
       }
       

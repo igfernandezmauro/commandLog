@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from commandlog.exceptions import UnauthorizedError
@@ -20,6 +21,9 @@ def claims_from_event(event: dict[str, Any] | None) -> dict[str, Any]:
     return {}
 
 def get_user_key(event: dict[str, Any] | None) -> str:
+    if os.getenv("APP_ENV") == "local":
+        return os.getenv("LOCAL_USER_KEY", "user#local-user")
+
     sub = claims_from_event(event).get("sub")
 
     if not sub:
