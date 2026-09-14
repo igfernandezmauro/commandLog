@@ -729,6 +729,86 @@ deploy_dev() {
 }
 
 
+deploy_prod_frontend() {
+    echo "========================================"
+    echo " Publishing CommandLog production frontend"
+    echo "========================================"
+    echo
+
+    local frontend_stack="commandlog-prod-frontend"
+    local web_bucket
+    local distribution_id
+    local frontend_url
+    local invalidation_id
+
+    if [[ ! -f "frontend/index.html" ]]; then
+        echo "FAIL: frontend/index.html does not exist." >&2
+        return 1
+    fi
+
+    web_bucket=$(
+        stack_output \
+            "$frontend_stack" \
+            "WebBucketName"
+    )
+
+    distribution_id=$(
+        stack_output \
+            "$frontend_stack" \
+            "DistributionId"
+    )
+
+    frontend_url=$(
+        stack_output \
+            "$frontend_stack" \
+            "FrontendUrl"
+    )
+
+    if [[ -z "$web_bucket" || "$web_bucket" == "None" ]]; then
+        echo "FAIL: production web bucket could not be resolved." >&2
+        return 1
+    fi
+
+    if [[ -z "$distribution_id" || "$distribution_id" == "None" ]]; then
+        echo "FAIL: production CloudFront distribution could not be resolved." >&2
+        return 1
+    fi
+
+    echo "Web bucket:   ${web_bucket}"
+    echo "Frontend:     ${frontend_url}"
+    echo
+
+    echo "Uploading frontend/index.html..."
+
+    aws s3 cp \
+        frontend/index.html \
+        "s3://${web_bucket}/index.html" \
+        --content-type "text/html; charset=utf-8" \
+        --cache-control "no-cache, no-store, must-revalidate" \
+        --region "$REGION" \
+        >/dev/null
+
+    echo "Creating CloudFront invalidation..."
+
+    invalidation_id=$(
+        aws cloudfront create-invalidation \
+            --distribution-id "$distribution_id" \
+            --paths "/" "/index.html" \
+            --query "Invalidation.Id" \
+            --output text
+    )
+
+    echo "Waiting for invalidation ${invalidation_id}..."
+
+    aws cloudfront wait invalidation-completed \
+        --distribution-id "$distribution_id" \
+        --id "$invalidation_id"
+
+    echo
+    echo "Production frontend published."
+}
+
+
 deploy_prod_app() {
     local automation_state="$1"
     local deployment_label="$2"
@@ -748,7 +828,6 @@ deploy_prod_app() {
     local snapshot_bucket
     local raw_bucket
     local generated_bucket
-    local cf_domain
     local account_id
     local app_role_arn
 
@@ -768,12 +847,6 @@ deploy_prod_app() {
         stack_output \
         "commandlog-prod-storage" \
         "GeneratedBucketName"
-    )
-
-    cf_domain=$(
-        stack_output \
-        "commandlog-prod-frontend" \
-        "DistributionDomainName"
     )
 
     account_id=$(
@@ -813,7 +886,7 @@ deploy_prod_app() {
             GeneratedBucketName="$generated_bucket" \
             CognitoIssuer="https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_e6TWFI8D9" \
             CognitoAudience="m2p7rqmpkq838hhlum98r1msb" \
-            FrontendOrigin="https://${cf_domain}" \
+            FrontendOrigin="https://commandlog.app" \
             InvokeIngestionOnSave=false \
             BackgroundAutomationState="$automation_state"
 
@@ -845,6 +918,9 @@ deploy_prod() {
         "production"
 
     echo
+    deploy_prod_frontend
+
+    echo
     prod_smoke_test
 }
 
@@ -855,37 +931,31 @@ prod_smoke_test() {
     echo "========================================"
     echo
 
-    local api_url
-    local cf_domain
+    local api_url="https://api.commandlog.app"
+    local frontend_url
     local http_code
     local allowed_origin
     local automation_state
     local ingest_on_save
-
-    api_url=$(
-        stack_output \
-        "commandlog-prod-app" \
-        "HttpApiUrl"
-    )
-
-    cf_domain=$(
-        stack_output \
-        "commandlog-prod-frontend" \
-        "DistributionDomainName"
-    )
 
     if [[ -z "$api_url" || "$api_url" == "None" ]]; then
         echo "FAIL: production API URL could not be resolved." >&2
         return 1
     fi
 
-    if [[ -z "cf_domain" || "$cf_domain" == "None" ]]; then
+    frontend_url=$(
+        stack_output \
+            "commandlog-prod-frontend" \
+            "FrontendUrl"
+    )
+
+    if [[ -z "$frontend_url" || "$frontend_url" == "None" ]]; then
         echo "FAIL: production CloudFront domain could not be resolved." >&2
         return 1
     fi
 
     echo "Production API: ${api_url}"
-    echo "Production frontend: https://${cf_domain}"
+    echo "Production frontend: ${frontend_url}"
     echo
 
     echo "Checking production frontend..."
@@ -894,7 +964,7 @@ prod_smoke_test() {
         curl -sS \
             -o /dev/null \
             -w "%{http_code}" \
-            "https://${cf_domain}/"
+            "${frontend_url}/"
     )
 
     if [[ "$http_code" != "200" ]]; then
@@ -929,7 +999,7 @@ prod_smoke_test() {
             -D - \
             -o /dev/null \
             -X OPTIONS \
-            -H "Origin: https://${cf_domain}" \
+            -H "Origin: ${frontend_url}" \
             -H "Access-Control-Request-Method: GET" \
             -H "Access-Control-Request-Headers: authorization" \
             "${api_url%/}/decks" \
@@ -940,9 +1010,9 @@ prod_smoke_test() {
         | xargs
     )
 
-    if [[ "$allowed_origin" != "https://${cf_domain}" ]]; then
+    if [[ "$allowed_origin" != "${frontend_url}" ]]; then
         echo "FAIL: production CORS origin mismatch." >&2
-        echo "Expected: https://${cf_domain}" >&2
+        echo "Expected: ${frontend_url}" >&2
         echo "Actual:   ${allowed_origin:-<missing>}" >&2
         return 1
     fi

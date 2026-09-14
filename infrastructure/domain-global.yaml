@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CommandLog global domain infrastructure
+
+Parameters:
+  HostedZoneId:
+    Type: String
+
+Resources:
+  FrontendCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: commandlog.app
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: commandlog.app
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: application
+          Value: commandlog
+        - Key: environment
+          Value: prod
+
+Outputs:
+  FrontendCertificateArn:
+    Description: ACM certificate ARN for the production CloudFront distribution
+    Value: !Ref FrontendCertificate
