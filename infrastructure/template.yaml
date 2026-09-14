@@ -402,6 +402,12 @@ Resources:
               - s3:GetObject
             Resource:
               - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
+          - Sid: ListDeckSnapshots
+            Effect: Allow
+            Action:
+              - s3:ListBucket
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}
       Events:
         GetDeckDiff:
           Type: HttpApi
