@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CommandLog production API custom domain
+
+Parameters:
+  HostedZoneId:
+    Type: String
+
+  ApiId:
+    Type: String
+
+  ApiStage:
+    Type: String
+    Default: "$default"
+
+Resources:
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: api.commandlog.app
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: api.commandlog.app
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: application
+          Value: commandlog
+        - Key: environment
+          Value: prod
+
+  ApiDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: api.commandlog.app
+      DomainNameConfigurations:
+        - EndpointType: REGIONAL
+          CertificateArn: !Ref ApiCertificate
+          SecurityPolicy: TLS_1_2
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref ApiId
+      DomainName: !Ref ApiDomain
+      Stage: !Ref ApiStage
+
+  ApiIPv4Record:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: api.commandlog.app
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
+        EvaluateTargetHealth: false
+
+  ApiIPv6Record:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: api.commandlog.app
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt ApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
+        EvaluateTargetHealth: false
+
+Outputs:
+  ApiCertificateArn:
+    Value: !Ref ApiCertificate
+
+  ApiDomainName:
+    Value: !Ref ApiDomain
+
+  ApiRegionalDomainName:
+    Value: !GetAtt ApiDomain.RegionalDomainName
+
+  ApiUrl:
+    Value: https://api.commandlog.app

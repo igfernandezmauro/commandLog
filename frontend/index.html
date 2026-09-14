@@ -1,0 +1,2499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Log Commander Game</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 16px; }
+    .card { max-width: 560px; margin: 0 auto; padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input, select, textarea, button {
+      width: 100%;
+      margin-top: 6px;
+      padding: 12px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+    textarea { min-height: 72px; }
+    button { margin-top: 16px; cursor: pointer; }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    .hint { color: #555; font-size: 13px; margin-top: 6px; }
+    .status { margin-top: 12px; font-size: 14px; }
+    .ok { color: #0a7; }
+    .err { color: #b00; }
+
+    details { margin-top: 14px; }
+    summary { cursor: pointer; font-weight: 700; }
+    .subtle { color: #555; font-size: 13px; margin-top: 4px; }
+    .checkrow { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+    .checkrow input[type="checkbox"] { width: auto; transform: scale(1.2); margin: 0; }
+    .checkrow label { margin: 0; font-weight: 600; }
+    .btn-clear {
+        background: #f5f5f5;
+        border: 1px solid #ccc;
+        color: #444;
+        font-size: 14px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        line-height: 1;
+    }
+    .btn-clear:hover {
+        background: #eee;
+    }
+    .btn-clear:active {
+        background: #e5e5e5;
+    }
+    .btn-clear.small {
+        padding: 10px 10px;
+    }
+    
+    .tabBtn {
+        flex: 1;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        background: #fff;
+        font-weight: 700;
+    }
+    .tabActive {
+        border-color: #111;
+        background: #f5f5f5;
+    }
+    .section { display: none; }
+    .sectionActive { display: block; }
+    
+    .table-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border: 1px solid #eee;
+        border-radius: 12px;
+    }
+    
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 820px;
+    }
+    
+    .table th, .table td{
+        padding: 8px;
+        border-bottom: 1px solid #f2f2f2;
+        white-space: nowrap;
+        font-size: 14px;
+    }
+    
+    @media (max-width: 420px) {
+        .table th, .table td { font-size: 12px; padding: 7px; }
+    }
+    
+    .table th:first-child,
+    .table td:first-child {
+        position: sticky;
+        left: 0;
+        background: #fff;
+        z-index: 2;
+        border-right: 1px solid #eee;
+    }
+    
+    .table thead th:first-child { z-index: 3; }
+    
+    button.secondary {
+        background: #f6f6f6;
+        border: 1px solid #ddd;
+    }
+    button.secondary:hover { background: #efefef; }
+
+    .badgeBtn{
+      width: auto !important;
+      margin-top: 0 !important;
+      padding: 3px 10px !important;
+      font-size: 11px !important;
+      line-height: 1.1 !important;
+
+      display: inline-flex !important;
+      align-items: center;
+      gap: 6px;
+
+      border-radius: 999px !important;
+      background: #fff3cd !important;
+      border: 1px solid #ffeeba !important;
+
+      cursor: pointer;
+      user-select: none;
+      font-weight: bolder;
+    }
+    .badgeBtn:hover{ filter:brightness(0.98); }
+    .badgeBtn:active{ filter:brightness(0.95); }
+
+    .modalOverlay{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:flex-end;
+      justify-content:center;
+      background:rgba(0,0,0,0.35);
+      padding:14px;
+      z-index:9999;
+    }
+    .modalOverlay.open{ display:flex; }
+
+    .modal{
+      position: fixed;
+      inset: auto 0 0 0;
+      margin: 0 auto 12px auto;
+      width: min(560px, calc(100vw - 24px));
+      background: #fff;
+      border-radius: 16px;
+      z-index: 9999;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.25);
+      overflow: hidden;
+    }
+
+    .modalHeader{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      padding:12px 14px;
+      border-bottom:1px solid #eee;
+    }
+    .modalHeader button,
+    .modalFooter button{
+      width: auto !important;
+      margin-top: 0 !important;
+      padding: 10px 12px !important;
+      font-size: 14px !important;
+    }
+
+    .modalTitle{ font-weight:900; font-size:16px; }
+    .modalSubtitle{
+      margin-top:2px;
+      color:#555; font-size:13px;
+    }
+    .modalCloseBtn{
+      width:auto;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid #ddd;
+      background:#fff;
+      cursor:pointer;
+    }
+    .modalCloseBtn:hover{ background:#f6f6f6; }
+
+    .modalFooter{
+      padding:12px 14px;
+      border-top:1px solid #eee;
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+    }
+
+    .diffCols{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    @media (max-width: 520px){
+      .modalOverlay{ align-items:stretch; }
+      .diffCols{ grid-template-columns:1fr; }
+      .modal{ max-height:unset; border-radius:14px; }
+    }
+
+    .diffBox{
+      border:1px solid #eee;
+      border-radius:12px;
+      padding:10px;
+    }
+    .diffBoxTitle{ font-weight:900; margin-bottom:8px; }
+    .diffList{
+      list-style:none;
+      padding:0;
+      margin:0;
+    }
+    .diffItem{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 0;
+      border-bottom:1px solid #f2f2f2;
+    }
+    .diffItem:last-child{ border-bottom:none; }
+    .cardImg{
+      width:34px; height:34px;
+      border-radius:8px;
+      border:1px solid #eee;
+      background:#fafafa;
+      object-fit:cover;
+      flex:0 0 auto;
+    }
+    .cardName{ font-weight:700; font-size:14px; }
+    .cardMeta{ color:#666; font-size:12px; }
+
+    .versionLink{
+      width: auto !important;
+      margin-top: 0 !important;
+      padding: 0 !important;
+      font-size: inherit !important;
+      background: transparent !important;
+      border: none !important;
+      text-align: left !important;
+      
+      cursor: pointer;
+      font-weight: 700;
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+    }
+    .versionLink:hover{
+      text-decoration-thickness: 2px;
+    }
+    .versionLink:active{
+      opacity: 0.8;
+    }
+    .totalCell {
+      width: auto !important;
+      margin-top: 0 !important;
+      padding: 0 !important;
+      font-size: inherit !important;
+      background: transparent !important;
+      border: none !important;
+      text-align: left !important;
+      
+      font-weight: 700;
+    }
+
+    .imgOverlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.6);
+      padding: 16px;
+      z-index: 10000;
+    }
+    .imgOverlay.open{ display: flex; }
+
+    .imgModal{
+      position: relative;
+      max-width: min(520px, 92vw);
+      width: auto;
+    }
+    .imgBig{
+      width: 100%;
+      height: auto;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,0.15);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+    }
+    .imgModal .modalCloseBtn{
+      position: absolute;
+      top: -10px;
+      right: -10px;
+    }
+    
+    .autocomplete {
+      position: relative;
+    }
+    .suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 5000;
+    }
+    .suggestionItem {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .suggestionItem:hover {
+      background: #f5f5f5;
+    }
+    .hidden { display: none !important; }
+
+    .modal-backdrop{
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 9998;
+    }
+    .modal-header{
+      padding: 16px 18px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid #eee;
+    }
+    .modal-title{ font-size: 18px; font-weight: 800; }
+    .modal-subtitle{ font-size: 12px; color: #666; margin-top: 4px; }
+    .modal-close{
+      border: 1px solid #e6e6e6;
+      background: #fff;
+      width: 34px; height: 34px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      padding: 0 !important;
+    }
+    .modal-body{
+        overflow: auto;
+        padding: 16px 18px;
+        display: grid;
+        gap: 14px;
+        max-height: 60vh;
+    }
+    .field{ display: grid; gap: 6px; }
+    .form-label{ font-size: 12px; color: #444; font-weight: 700; }
+    .form-input{
+      padding: 12px 12px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      font-size: 16px;
+    }
+    .toggle-row{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #eee;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+    .toggle-row input{
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      flex: 0 0 auto;
+      accent-color: #111;
+    }
+    .toggle-row > div{
+      flex: 1 1 auto;
+    }
+    .toggle-title{ font-weight: 800; }
+    .toggle-hint{ font-size: 12px; color: #666; margin-top: 2px; }
+    .status-text{
+      font-size: 12px;
+      min-height: 16px;
+      margin-top: 12px;
+      color: #1b5e20;
+    }
+    .modal-footer{
+      padding: 12px 18px;
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: flex-end;
+    }
+    .btn-primary{
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px solid #222;
+      background: #111;
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+      width: auto;
+      min-width: 120px;
+    }
+    .input-row{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn-secondary{
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      background: #fafafa;
+      cursor: pointer;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .btn-secondary:hover{ background: #f2f2f2; }
+    .form-input[readonly]{
+      background: #f8f8f8;
+      color: #333;
+    }
+    .switch{
+      position:relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgb(106, 38, 155, 1);
+      -webkit-transition: .4s;
+      transition: .4s;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      -webkit-transition: .4s;
+      transition: .4s;
+    }
+    input:checked + .slider {
+      background-color: rgb(235, 143, 55, 1);
+    }
+    input:focus + .slider {
+      box-shadow: 0 0 1px rgb(235, 143, 55, 1);
+    }
+    input:checked + .slider:before{
+      -webkit-transform: translateX(26px);
+      -ms-transform: translateX(26px);
+      transform: translateX(26px);
+    }
+    .slider.round {
+      border-radius: 34px;
+    }
+    .slider.round:before{
+      border-radius: 50%;
+    }
+    .source-switch{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <button id="login-btn" onclick="cognitoLogin()">Login</button>
+    <button id="profile-btn" type="button">Profile</button>
+    <button id="logout-btn" onclick="cognitoLogout()">Logout</button>
+
+
+    <h2 style="margin-top:0;">Log a Commander game</h2>
+    
+    <div class="tabs" style="display:flex; gap:8px; margin:12px 0;">
+      <button id="tabLog" type="button" class="tabBtn tabActive">Log</button>
+      <button id="tabStats" type="button" class="tabBtn">Stats</button>
+      <button id="tabRecents" type="button" class="tabBtn">Recent games</button>
+    </div>
+
+    <details style="margin-bottom:14px;">
+      <summary style="font-weight:700; cursor:pointer; user-select:none;">Pick decks for tonight</summary>
+
+      <div style="margin-top:12px;">
+        <div class="row">
+          <div>
+            <label for="pickCount" style="margin-top:0;">How many decks?</label>
+            <input id="pickCount" type="number" min="1" max="10" value="3" />
+          </div>
+
+          <div>
+            <label style="margin-top:0;">&nbsp;</label>
+            <button id="pickBtn" type="button">Pick</button>
+          </div>
+        </div>
+
+        <div class="hint" id="pickHint"></div>
+        <div id="pickResults" style="margin-top:10px;"></div>
+      </div>
+    </details>
+
+    <label for="deck">Deck</label>
+    <div id="deckInfo" style="margin-bottom:12px;"></div>
+    <select id="deck"></select>
+    <div class="hint">Loaded from /decks.</div>
+    
+    <div id="sectionLog" class="section sectionActive">
+      <div class="row">
+        <div>
+          <label for="store">Store / Location</label>
+          <div class="row" style="gap:8px;">
+            <div style="flex:1;">
+              <input id="store" placeholder="Optional" />
+            </div>
+            <div style="flex:0 0 auto;">
+              <button id="clearStore" type="button" class="btn-clear small" title="Clear store">✕</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="autocomplete">
+        <label for="opponents">Opponents commanders</label>
+        <textarea id="opponents" placeholder="One per line. Use // for partners. Example:
+Alora, Merry Thief // Agent of the Shadow Thieves
+Krenko, Mob Boss
+The Ur-Dragon"></textarea>
+        <div id="commanderSuggestions" class="suggestions"></div>
+      </div>
+      
+      <div class="row">
+        <div>
+          <label for="turn_order">My turn order (seat)</label>
+          <input id="turn_order" type="number" min="1" inputmode="numeric" placeholder="Optional" />
+        </div>
+        <div>
+          <label for="mulligans">Mulligans</label>
+          <input id="mulligans" type="number" min="0" inputmode="numeric" placeholder="Optional" />
+        </div>
+      </div>
+      
+      <label for="mulligan_note">Mulligan note</label>
+      <input id="mulligan_note" placeholder="Optional (why you mulliganed)" />
+      
+      <div class="checkrow">
+        <input id="sol_ring_opening" type="checkbox" />
+        <label for="sol_ring_opening">Sol Ring in opening hand</label>
+      </div>
+      
+      <div class="row">
+        <div>
+          <button id="startGame" type="button">Start game</button>
+          <div class="hint" id="gameTimerHint"></div>
+        </div>
+        <div>
+          <button id="clearStart" type="button" class="secondary">Clear start time</button>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div>
+          <label for="turns">Turns</label>
+          <input id="turns" type="number" min="1" inputmode="numeric" placeholder="Optional" />
+        </div>
+        <div>
+          <label for="result">Result</label>
+          <select id="result">
+            <option value="WIN">WIN</option>
+            <option value="LOSS">LOSS</option>
+            <option value="DRAW">DRAW</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div>
+          <label for="missed_land_drops">Missed land drops</label>
+          <input id="missed_land_drops" type="number" min="0" inputmode="numeric" placeholder="Optional" />
+        </div>
+        <div>
+          <label for="feeling">Game feeling</label>
+          <select id="feeling">
+            <option value="">(optional)</option>
+            <option value="1">1 - awful</option>
+            <option value="2">2 - rough</option>
+            <option value="3">3 - ok</option>
+            <option value="4">4 - good</option>
+            <option value="5">5 - amazing</option>
+          </select>
+        </div>
+      </div>
+      
+      <div>
+        <label for="feeling_note">Feeling note</label>
+        <input id="feeling_note" placeholder="Optional" />
+      </div>
+      
+      <div class="row">
+        <div class="checkrow">
+          <input id="mana_flooded" type="checkbox" />
+          <label for="mana_flooded">Mana flooded</label>
+        </div>
+        <div class="checkrow">
+          <input id="sol_ring_cast" type="checkbox" />
+          <label for="sol_ring_cast">Cast Sol Ring</label>
+        </div>
+      </div>
+      
+      <details>
+        <summary>Notes</summary>
+        <textarea id="notes" placeholder="Optional"></textarea>
+      </details>
+
+      <button id="submit">Log game</button>
+      <div id="status" class="status"></div>
+    </div>
+    
+    <div id="sectionStats" class="section">
+      <hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
+      <h3 style="margin:0 0 8px 0;">Stats</h3>
+      <button id="refreshStats" type="button" style="margin-top:0;">Refresh stats</button>
+      
+      <details>
+        <summary>General</summary>
+        <table id="statsTable" style="width:100%; border-collapse:collapse; font-size:14px;">
+          <tbody></tbody>
+        </table>
+        
+        <div id="turnOrderBox" style="margin-top:12px;"></div>
+        
+        <div id="mulligansBox" style="margin-top:12px;"></div>
+      
+        <div id="topDecks" style="margin-top:10px;"></div>
+      </details>
+      
+      <details>
+        <summary>Versions</summary>
+        <div class="hint" style="margin-bottom:10px;">Grouped by <code>asof_list_hash</code> stored at play time.</div>
+        <div id="versionsStatus" class="status"></div>
+        <div class="table-scroll">
+          <table id="versionsTable" style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:8px; border-bottom:1px solid #eee;">Version</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Games</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">W</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">L</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">D</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Win%</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Avg Turns</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Avg Mulls</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Avg MLD</th>
+                <th style="text-align:right; padding:8px; border-bottom:1px solid #eee;">Avg Feel</th>
+                <th style="text-align:left; padding:8px; border-bottom:1px solid #eee;">First Played</th>
+                <th style="text-align:left; padding:8px; border-bottom:1px solid #eee;">Last Played</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+    
+    <div id="sectionRecents" class="section">
+      <hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
+      <h3 style="margin:0 0 8px 0;">Recent games</h3>
+      <div class="hint" id="tzHint"></div>
+      <button id="refreshGames" type="button" style="margin-top:0;">Refresh</button>
+      <pre id="gamesBox" style="white-space:pre-wrap; background:#fafafa; border:1px solid #eee; padding:12px; border-radius:10px;"></pre>
+    </div>
+  </div>
+
+  <!-- Diff modal -->
+  <div id="diffModal" class="modalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="diffTitle">
+      <div class="modalHeader">
+        <div style="min-width:0;">
+          <div id="diffTitle" class="modalTitle">Deck updates</div>
+          <div id="diffSubtitle" class="modalSubtitle"></div>
+        </div>
+        <button id="diffClose" type="button" class="modalCloseBtn" aria-label="Close">x</button>
+      </div>
+
+      <div id="diffBody" class="modal-body">
+      </div>
+
+      <div class="modalFooter">
+        <button id="diffRefresh" type="button" class="secondary" style="margin:0;">Refresh</button>
+        <button id="diffOk" type="button" style="margin:0;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card image lightbox -->
+  <div id="imgLightbox" class="imgOverlay" aria-hidden="true">
+    <div class="imgModal">
+      <button id="imgClose" type="button" class="modalCloseBtn" aria-label="Close">x</button>
+      <img alt="Card image" id="imgLightboxImg" class="imgBig">
+    </div>
+  </div>
+
+  <!-- Profile Modal -->
+  <div id="profileModalBackdrop" class="modal-backdrop hidden"></div>
+
+  <div id="profileModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+    <div class="modal-header">
+      <div>
+        <div id="profileTitle" class="modal-title">Profile</div>
+        <div class="modal-subtitle">Set your Archidekt username for deck syncing.</div>
+      </div>
+        <button id="profileCloseBtn" class="modal-close" type="button" aria-label="Close">x</button>
+    </div>
+
+    <div class="modal-body">
+      <div id="archidektInput" class="field">
+        <label for="archidektUsernameInput" class="form-label">Archidekt username</label>
+
+        <div class="input-row">
+          <input type="text" id="archidektUsernameInput" class="form-input" placeholder="Archidekt username"/>
+          <button id="archidektEditBtn" class="btn-secondary" type="button">Edit</button>
+        </div>
+      </div>
+
+      <label class="toggle-row" for="enabledInput">
+        <input type="checkbox" id="enabledInput" />
+        <div>
+          <div class="toggle-title">Enable ingestion</div>
+          <div class="toggle-hint">We will periodically sync your public decks automatically.</div>
+        </div>
+      </label>
+
+      <div id="profileStatus" class="status-text"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button id="profileSaveBtn" class="btn-primary" type="button">Save</button>
+    </div>
+  </div> 
+
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const API_BASE_URL = "https://api.commandlog.app";
+      const START_KEY = "mtg_game_started_at";
+      let DECKS = [];
+      let ACTIVE_DIFF_DECK_ID = null;
+      let COMMANDERS = [];
+      let archidektEditMode = false;
+      let archidektOriginalValue = "";
+
+      const elDeck = document.getElementById("deck");
+      const elResult = document.getElementById("result");
+      const elNotes = document.getElementById("notes");
+      const elStore = document.getElementById("store");
+      const elClearStore = document.getElementById("clearStore");
+      const elStatus = document.getElementById("status");
+      const elTurnOrder = document.getElementById("turn_order");
+      const elMulligans = document.getElementById("mulligans");
+      const elSubmit = document.getElementById("submit");
+      const elRefreshStats = document.getElementById("refreshStats");
+      const elRefreshGames = document.getElementById("refreshGames");
+      const elGamesBox = document.getElementById("gamesBox");
+      const elPickCount = document.getElementById("pickCount");
+      const elPickBtn = document.getElementById("pickBtn");
+      const elPickResults = document.getElementById("pickResults");
+      const elPickHint = document.getElementById("pickHint");
+      const elVersionStatus = document.getElementById("versionsStatus");
+      const elStart = document.getElementById("startGame");
+      const elClearStart = document.getElementById("clearStart");
+      const elGameTimerHint = document.getElementById("gameTimerHint");
+      const elOpp = document.getElementById("opponents");
+      const suggestionsBox = document.getElementById("commanderSuggestions");
+      const nameToId = new Map();
+
+      // Advanced fields
+      const elTurns = document.getElementById("turns");
+      const elMulliganNote = document.getElementById("mulligan_note");
+      const elMissedLandDrops = document.getElementById("missed_land_drops");
+      const elManaFlooded = document.getElementById("mana_flooded");
+      const elSolRingOpening = document.getElementById("sol_ring_opening");
+      const elSolRingCast = document.getElementById("sol_ring_cast");
+      const elFeeling = document.getElementById("feeling");
+      const elFeelingNote = document.getElementById("feeling_note");
+
+      // Cognito Config
+      const COGNITO_DOMAIN = "https://ca-central-1e6twfi8d9.auth.ca-central-1.amazoncognito.com";
+      const CLIENT_ID = "m2p7rqmpkq838hhlum98r1msb";
+      const REDIRECT_URI = "https://commandlog.app/";
+      const SCOPES = "openid email profile";
+      
+      // Tabs
+      const tabLog = document.getElementById("tabLog");
+      const tabStats = document.getElementById("tabStats");
+      const tabRecents = document.getElementById("tabRecents");
+      const sectionLog = document.getElementById("sectionLog");
+      const sectionStats = document.getElementById("sectionStats");
+      const sectionRecents = document.getElementById("sectionRecents");
+
+      // Diff modal wiring + data
+      const elDiffModal = document.getElementById("diffModal");
+      const elDiffBody = document.getElementById("diffBody");
+      const elDiffTitle = document.getElementById("diffTitle");
+      const elDiffSubtitle = document.getElementById("diffSubtitle");
+      const elDiffClose = document.getElementById("diffClose");
+      const elDiffOk = document.getElementById("diffOk");
+      const elDiffRefresh = document.getElementById("diffRefresh");
+
+      // Img lightbox
+      const elImgOverlay = document.getElementById("imgLightbox");
+      const elImg = document.getElementById("imgLightboxImg");
+      const elImgClose = document.getElementById("imgClose");
+
+      // Profile modal
+      const labels = document.querySelectorAll(".source-switch span");
+
+      // PKCE helpers
+      function base64UrlEncode(arrayBuffer) {
+        const bytes = new Uint8Array(arrayBuffer);
+        let str = "";
+        for (const b of bytes) str += String.fromCharCode(b);
+        return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      }
+
+      function randomString(length = 64){
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+        const bytes = new Uint8Array(length);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, b => chars[b % chars.length]).join("");
+      }
+
+      async function sha256(str) {
+        const data = new TextEncoder().encode(str);
+        const hash = await crypto.subtle.digest("SHA-256", data);
+        return hash;
+      }
+
+      async function pkceChallenge(verifier) {
+        const hash = await sha256(verifier);
+        return base64UrlEncode(hash);
+      }
+
+      // Auth flow
+      async function login(){
+        const verifier = randomString(64);
+        const challenge = await pkceChallenge(verifier);
+
+        sessionStorage.setItem("pkce_verifier", verifier);
+
+        const url = 
+          `${COGNITO_DOMAIN}/oauth2/authorize?` +
+          new URLSearchParams({
+            client_id: CLIENT_ID,
+            response_type: "code",
+            scope: SCOPES,
+            redirect_uri: REDIRECT_URI,
+            code_challenge_method: "S256",
+            code_challenge: challenge,
+          }).toString();
+
+          window.location.assign(url);
+      }
+
+      async function exchangeCodeForToken(code){
+        const verifier = sessionStorage.getItem("pkce_verifier");
+        if (!verifier) throw new Error("Missing PKCE verifier in sessionStorage");
+
+        const body = new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: CLIENT_ID,
+          code,
+          redirect_uri: REDIRECT_URI,
+          code_verifier: verifier,
+        });
+
+        const resp = await fetch(`${COGNITO_DOMAIN}/oauth2/token`, {
+          method: "POST",
+          headers: {"Content-Type": "application/x-www-form-urlencoded"},
+          body: body.toString(),
+        });
+
+        if (!resp.ok) {
+          const txt = await resp.text();
+          throw new Error(`Token exchange failed (${resp.status}): ${txt}`);
+        }
+
+        return await resp.json();
+      }
+
+      function setTokens(tokens){
+        localStorage.setItem("id_token", tokens.id_token);
+        localStorage.setItem("access_token", tokens.access_token);
+        if (tokens.refresh_token) localStorage.setItem("refresh_token", tokens.refresh_token);
+        localStorage.setItem("token_obtained_at", String(Date.now()));
+        localStorage.setItem("expires_in", String(tokens.expires_in || 3600));
+      }
+
+      function getIdToken(){
+        return localStorage.getItem("id_token");
+      }
+
+      function logout(){
+        localStorage.removeItem("id_token");
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("token_obtained_at");
+        localStorage.removeItem("expires_in");
+
+        renderLoggedOutState();
+
+        const url = 
+        `${COGNITO_DOMAIN}/logout?` +
+        new URLSearchParams({
+          client_id: CLIENT_ID,
+          logout_uri: REDIRECT_URI,
+        }).toString();
+
+        window.location.assign(url);
+      }
+
+      async function handleCallbackIfPresent(){
+        const u = new URL(window.location.href);
+        const code = u.searchParams.get("code");
+        const err = u.searchParams.get("error");
+        const errDesc = u.searchParams.get("error_description");
+
+        if (err){
+          console.log("Cognito error:", err, errDesc);
+          return;
+        }
+
+        if (!code) return;
+
+        u.searchParams.delete("code");
+        window.history.replaceState({}, document.title, u.toString());
+
+        const tokens = await exchangeCodeForToken(code);
+        setTokens(tokens);
+      }
+
+      function renderLoggedOutState() {
+        document.getElementById("login-btn").style.display = "inline-block";
+        document.getElementById("logout-btn").style.display = "none";
+        document.getElementById("profile-btn").style.display = "none";
+      }
+
+      function renderLoggedInState() {
+        document.getElementById("login-btn").style.display = "none";
+        document.getElementById("logout-btn").style.display = "inline-block";
+        document.getElementById("profile-btn").style.display = "inline-block";
+      }
+
+      function decodeJwt(token) {
+        const [, payload] = token.split(".");
+        return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+      }
+
+      function isTokenValid(token){
+        if (!token) return false;
+        try {
+          const { exp } = decodeJwt(token);
+          const now = Math.floor(Date.now() / 1000);
+          return exp && exp > (now + 30);
+        } catch {
+          return false;
+        }
+      }
+
+      async function refreshTokensIfNeeded() {
+        const idToken = getIdToken();
+        if (isTokenValid(idToken)) return;
+
+        const refreshToken = localStorage.getItem("refresh_token");
+        if (!refreshToken) {
+          cognitoLogin();
+          throw new Error("No refresh token, please login again");
+        }
+
+        const body = new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: CLIENT_ID,
+          refresh_token: refreshToken,
+        });
+
+        const resp = await fetch(`${COGNITO_DOMAIN}/oauth2/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString(),
+        });
+
+        if (!resp.ok) {
+          localStorage.removeItem("id_token");
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+          cognitoLogin()
+          throw new Error("Refresh failed, re-login required");
+        }
+
+        const tokens = await resp.json();
+        if (tokens.id_token) localStorage.setItem("id_token", tokens.id_token);
+        if (tokens.access_token) localStorage.setItem("access_token", tokens.access_token);
+        localStorage.setItem("token_obtained_at", String(Date.now()));
+        if (tokens.expires_in) localStorage.setItem("expires_in", tokens.expires_in);
+      }
+
+      // Use token in API calls
+      async function apiFetch(url, opts = {}) {
+        await refreshTokensIfNeeded();
+
+        const token = getIdToken();
+        const headers = new Headers(opts.headers || {});
+
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+
+        return fetch(url, { ...opts, headers });
+      }
+
+      // Profile
+      function setArchidektEditMode(on){
+        archidektEditMode = on;
+
+        const input = document.getElementById("archidektUsernameInput");
+        const btn = document.getElementById("archidektEditBtn");
+
+        if (on) {
+          archidektOriginalValue = input.value;
+          input.readOnly = false;
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
+          btn.textContent = "Cancel";
+        } else {
+          input.value = archidektOriginalValue;
+          input.readOnly = true;
+          btn.textContent = "Edit";
+        }
+      }
+
+      // Image
+      function openImg(url) {
+        if (!url) return;
+        elImg.src = url;
+        elImgOverlay.classList.add("open");
+        elImgOverlay.setAttribute("aria-hidden", "false");
+      }
+
+      function closeImg() {
+        elImg.src = "";
+        elImgOverlay.classList.remove("open");
+        elImgOverlay.setAttribute("aria-hidden", "true");
+      }
+      
+      function setTab(name) {
+          tabLog.classList.toggle("tabActive", name === "log");
+          tabStats.classList.toggle("tabActive", name === "stats");
+          tabRecents.classList.toggle("tabActive", name === "recents");
+          
+          sectionLog.classList.toggle("sectionActive", name === "log");
+          sectionStats.classList.toggle("sectionActive", name === "stats");
+          sectionRecents.classList.toggle("sectionActive", name === "recents");
+          
+          localStorage.setItem("active_tab", name);
+      }
+
+      function normalize(s) {
+        return s
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9\s]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function searchCards(q) {
+        const nq = normalize(q);
+        if (!nq) return [];
+
+        const starts = [];
+        const contains = [];
+        
+        for (const c of COMMANDERS) {
+          if (!c.n) continue;
+
+          if (c.n.startsWith(nq)) starts.push(c);
+          else if (c.n.includes(nq)) contains.push(c);
+        }
+
+        return [...starts, ...contains].slice(0, 10);
+      }
+
+      function getCaretIndex(el) {
+        return el.selectionStart ?? 0;
+      }
+
+      function getLineBounds(text, caret) {
+        const start = text.lastIndexOf("\n", caret - 1) + 1;
+        const endIdx = text.indexOf("\n", caret);
+        const end = endIdx === -1 ? text.length : endIdx;
+        return { start, end };
+      }
+
+      function getSegmentBoundsInLine(lineText, caretInLine) {
+        const beforeCaret = lineText.slice(0, caretInLine);
+
+        const last = beforeCaret.lastIndexOf("//");
+        const segStart = (last === -1) ? 0 : (last + 2);
+
+        let start = segStart;
+        while (start < lineText.length && lineText[start] === " ") start++;
+
+        const end = lineText.length;
+
+        return { start, end };
+      }
+
+      function replaceCurrentLineSegment(textarea, replacement) {
+        const info = getCurrentLine(textarea);
+        const caretInLine = info.caret - info.start;
+
+        const seg = getSegmentBoundsInLine(info.line, caretInLine);
+
+        const newLine = 
+          info.line.slice(0, seg.start) +
+          replacement +
+          info.line.slice(seg.end);
+
+        const before = info.text.slice(0, info.start);
+        const after = info.text.slice(info.end);
+
+        textarea.value = before + newLine + after;
+
+        const newCaret = info.start + seg.start + replacement.length;
+        textarea.setSelectionRange(newCaret, newCaret);
+      }
+
+      function getCurrentLine(textarea) {
+        const text = textarea.value;
+        const caret = getCaretIndex(textarea);
+        const { start, end } = getLineBounds(text, caret);
+        return {
+          text,
+          caret,
+          start,
+          end,
+          line: text.slice(start, end),
+        };
+      }
+
+      function replaceCurrentLine(textarea, newLine) {
+        const info = getCurrentLine(textarea);
+        const before = info.text.slice(0, info.start);
+        const after = info.text.slice(info.end);
+
+        const updated = before + newLine + after;
+        textarea.value = updated;
+
+        const newCaret = (before + newLine).length;
+        textarea.setSelectionRange(newCaret, newCaret);
+      }
+
+      function clearSuggesstions() {
+        suggestionsBox.innerHTML = "";
+      }
+
+      function showSuggestions(results) {
+        clearSuggesstions();
+        if (!results.length) return;
+
+        for (const r of results) {
+          const div = document.createElement("div");
+          div.className = "suggestionItem";
+          div.textContent = r.name;
+
+          div.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+
+            replaceCurrentLineSegment(elOpp, r.name);
+            nameToId.set(r.name, r.oracle_id);
+
+            clearSuggesstions();
+            elOpp.focus();
+          });
+
+          suggestionsBox.appendChild(div);
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('\"', "&quot;")
+          .replaceAll("\'", "&#039;");
+      }
+      
+      function pct(x) {
+          if (x === null || x === undefined) return "n/a";
+          return `${(x * 100).toFixed(1)}%`;
+      }
+
+      function nowIsoUtc() {
+          return new Date().toISOString();
+      }
+      
+      function getStartedAt() {
+          return localStorage.getItem(START_KEY) || "";
+      }
+      
+      function setStartedAt(v) {
+          if (v) localStorage.setItem(START_KEY, v);
+          else localStorage.removeItem(START_KEY);
+          renderStartHint();
+      }
+      
+      function renderStartHint() {
+          if (!elGameTimerHint) return;
+          const startedAt = getStartedAt();
+          if (!startedAt) {
+              elGameTimerHint.textContent = "No game in progress.";
+              return;
+          }
+          
+          const start = new Date(startedAt);
+          const mins = Math.max(0, Math.floor((Date.now() - start.getTime()) / 60000));
+          elGameTimerHint.textContent = `Started: ${start.toLocaleTimeString()} (${mins} min ago)`;
+      }
+
+      function getDeviceTimeZone() {
+          return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      }
+      
+      function formatInTimeZone(isoUtc, tz) {
+          if (!isoUtc) return "";
+          const d = new Date(isoUtc);
+          return d.toLocaleString("en-GB", {
+              timeZone: tz,
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true
+          });
+      }
+
+      function unwrapDdb(v) {
+        if (v && typeof v === "object") {
+          if ("S" in v) return v.S;
+          if ("N" in v) return Number(v.N);
+          if ("BOOL" in v) return !!v.BOOL;
+        }
+        return v;
+      }
+
+      function normalizeChangeLogRow(r) {
+        return {
+          deck_id: unwrapDdb(r.deckId),
+          changed_at: unwrapDdb(r.changed_at),
+          change_type: unwrapDdb(r.change_type),
+          list_hash: unwrapDdb(r.list_hash),
+        };
+      }
+
+      function sortDescByIso(a, b) {
+        return a < b ? 1 : (a > b ? -1 : 0);
+      }
+
+      function openProfileModal() {
+        document.getElementById("profileModalBackdrop").classList.remove("hidden");
+        document.getElementById('profileModal').classList.remove("hidden");
+      }
+
+      function closeProfileModal() {
+        document.getElementById("profileModalBackdrop").classList.add("hidden");
+        document.getElementById('profileModal').classList.add("hidden");
+      }
+
+      function setProfileStatus(msg, ok = true) {
+        const el = document.getElementById("profileStatus");
+        el.textContent = msg || "";
+        el.style.color = ok ? "#1b5e20" : "#b71c1c";
+      }
+
+      async function loadProfileModal() {
+        setProfileStatus("Loading...", true);
+
+        const r = await apiFetch(`${API_BASE_URL}/me/profile`);
+        if (!r.ok) {
+          const t = await r.text();
+          setProfileStatus(`Failed to load: ${r.status} ${t}`, false);
+          return;
+        }
+
+        const data = await r.json();
+        const p = data.profile || {};
+
+        const archidektInput = document.getElementById("archidektUsernameInput");
+
+        archidektInput.value = p.archidekt_username || "";
+        archidektInput.readOnly = true;
+
+        document.getElementById("archidektEditBtn").textContent = "Edit";
+        
+        archidektEditMode = false;
+        archidektOriginalValue = archidektInput.value;
+
+        document.getElementById("enabledInput").checked = !!p.ingestion_enabled;
+        
+        setProfileStatus("Loaded", true);
+      }
+
+      async function waitForDecksToAppear({ maxMs = 30000, intervalMs = 2000} = {}) {
+        const start = Date.now();
+
+        while(Date.now() - start < maxMs) {
+          try {
+            const r = await apiFetch(`${API_BASE_URL}/decks`);
+            if (r.ok) {
+              const decks = await r.json();
+              if (Array.isArray(decks) && decks.length > 0) return decks;
+            }
+          } catch (e) {
+          }
+
+          await new Promise(res => setTimeout(res, intervalMs));
+        }
+
+        return null
+      }
+
+      async function saveProfileFromModal() {
+        const archidekt_username = document.getElementById("archidektUsernameInput").value.trim();
+
+        const ingestion_enabled = document.getElementById("enabledInput").checked;
+
+
+        setProfileStatus("Saving...", true);
+
+        const r = await apiFetch(`${API_BASE_URL}/me/profile`, {
+          method: "PUT",
+          body: JSON.stringify({ archidekt_username, ingestion_enabled, source: "archidekt" }),
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const data = await r.json().catch(async () => ({ raw: await r.text() }));
+        if (!r.ok) {
+          setProfileStatus(`Failed to save: ${r.status} ${JSON.stringify(data)}`, false);
+          return;
+        }
+
+        setProfileStatus("Saved.", true);
+
+        const started = !!(data.ingest && data.ingest.started);
+
+        if(started) {
+          setProfileStatus("Syncing decks...", true);
+
+          const decks = await waitForDecksToAppear({ maxMs: 30000, intervalMs: 2000 });
+
+          if (decks) {
+            setProfileStatus("Decks synced.", true);
+
+            await loadDecks();
+            closeProfileModal();
+          } else {
+            setProfileStatus("Sync started. Decks may take a bit longer, try again soon.", true);
+            await loadDecks().catch(() => {});
+          }
+        }
+      }
+
+      function buildAllVersions(changeLogRows) {
+        const rows = (changeLogRows || [])
+          .map(normalizeChangeLogRow)
+          .filter(x => x.list_hash && x.changed_at)
+          .sort((a, b) => sortDescByIso(a.changed_at, b.changed_at));
+
+        const out = [];
+        let prevHash = null;
+        for (const r of rows) {
+          if (r.list_hash !== prevHash) {
+            out.push(r);
+            prevHash = r.list_hash
+          }
+        }
+        return out;
+      }
+
+      function buildStatsByHash(versionStatsRows) {
+        const m = new Map();
+        for (const r of (versionStatsRows || [])) {
+          const key = r.list_hash;
+          if (key) m.set(key, r);
+        }
+        return m;
+      }
+
+      function fmtVersionLabel(v) {
+        const tz = getDeviceTimeZone();
+        const d = formatInTimeZone(v.changed_at, tz);
+        if (v.change_type == "CREATED") return `Created · ${d}`;
+        return d;
+      }
+
+      function setStatus(msg, ok) {
+        elStatus.textContent = msg;
+        elStatus.className = "status " + (ok ? "ok" : "err");
+      }
+      
+      function openDiffModal() {
+        elDiffModal.classList.add("open");
+        elDiffModal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeDiffModal() {
+        elDiffModal.classList.remove("open");
+        elDiffModal.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+        ACTIVE_DIFF_DECK_ID = null;
+      }
+
+      function renderDiffLoading() {
+        elDiffBody.innerHTML = `<div class="hint">Loading changes...</div>`;
+      }
+
+      function renderDiffError(msg) {
+        elDiffBody.innerHTML = `<div class="status err">${escapeHtml(msg)}</div>`;
+      }
+
+      function renderDiffEmpty(kind) {
+        const t = (kind === "new")
+          ? "This deck is marked as New, but there is no last-played anchor yet."
+          : "No changes detected since last played.";
+        elDiffBody.innerHTML = `<div class="hint">${escapeHtml(t)}</div>`;
+      }
+
+      function normalizeCardRow(x) {
+        const name = x.name || "Unknown card";
+        const thumb = x.image_small || x.image_normal || "";
+        const normal = x.image_normal || x.image_large || "";
+        const qty = x.qty ?? null;
+        const meta = qty != null ? `x${qty}` : "";
+        return {name, thumb, normal, meta};
+      }
+
+      function renderDiffList(title, items) {
+        const rows = (items || []).map(it => {
+          const c = normalizeCardRow(it);
+          const img = c.thumb
+            ? `<img class="cardImg" src="${escapeHtml(c.thumb)}" alt="" />`
+            : `<div class="cardImg></div>`;
+          const meta = c.meta ? `<div class="cardMeta">${escapeHtml(c.meta)}</div>` : "";
+          return `
+            <li class="diffItem cardPreviewItem"
+              data-img-normal="${escapeHtml(c.normal || "")}">
+              ${img}
+              <div style="mid-width:0;">
+                <div class="cardName">${escapeHtml(c.name)}</div>
+                ${meta}
+              </div>
+            </li>
+          `;
+        }).join("");
+
+        return `
+          <div class="diffBox">
+            <div class="diffBoxTitle">${escapeHtml(title)} (${(items || []).length})</div>
+            ${(items || []).length
+              ? `<ul class="diffList">${rows}</ul>`
+              : `<div class="hint">None.</div>`
+            }
+          </div>
+        `;
+      }
+
+      function renderPickResults(picked) {
+        if (!picked || picked.length === 0) {
+          elPickResults.innerHTML = `<div class="hint">No decks returned.</div>`;
+          return;
+        }
+
+        const rows = picked.map(d => {
+          const name = d.name || d.deck_id;
+          const badge = d.updated_since_last_played || d.is_new_deck ? `<span style="display:inline-block; padding:2px 8px; border-radius:999px; background:#fff3cd; border:1px solid #ffeeba; font-size:12px; margin-left:8px;">${d.is_new_deck ? "New" : "Updated"}</span>` : "";
+          const commander = d.commander ? ` <span class="hint">| ${escapeHtml(d.commander)}</span>${badge}` : "";
+          const meta = `<div class="hint">Games: ${d.games_played ?? "?"} · Days since: ${d.days_since_last_played < 10000 ? d.days_since_last_played : "Never"}</div>`;
+
+          // Button-like row you can tap
+          return `
+            <div style="border:1px solid #eee; border-radius:10px; padding:12px; margin-top:8px;">
+              <button type="button"
+                data-deck-id="${escapeHtml(d.deck_id)}"
+                class="pickDeckBtn"
+                style="width:100%; text-align:left; background:#fff; border:1px solid #ddd; border-radius:10px; padding:12px; font-size:16px;">
+                <div style="font-weight:700;">${escapeHtml(name)}${commander}</div>
+                ${meta}
+              </button>
+            </div>
+          `;
+        }).join("");
+        
+        elPickResults.innerHTML = rows;
+
+        // Wire clicks: selecting a picked deck sets your main dropdown
+        document.querySelectorAll(".pickDeckBtn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const deckId = btn.getAttribute("data-deck-id");
+            if (!deckId) return;
+
+            elDeck.value = deckId;
+            localStorage.setItem("last_deck_id", deckId);
+
+            // Optional: auto-scroll to the main Deck dropdown
+            elDeck.scrollIntoView({ behavior: "smooth", block: "center" });
+            
+            renderSelectedDeckInfo();
+
+            setStatus(`Selected deck: ${deckId}`, true);
+          });
+        });
+      }
+      
+      function renderMulliganTable(mullObj) {
+          const el = document.getElementById("mulligansBox");
+          if (!el) return;
+          
+          if (!mullObj || Object.keys(mullObj).length === 0) return '<div class="hint">No mulligan data yet.</div>';
+          
+          const order = ["0", "1", "2", "3+"];
+          const rows = Object.entries(mullObj)
+            .sort((a,b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+            .map(([k,v]) => ({
+                k,
+                games: v.games ?? 0,
+                wins: v.wins ?? 0,
+                win_rate: v.win_rate ?? 0
+          }));
+            
+          const eligible = rows.filter(r => r.games >= 2 && r.k !== "unknown");
+          const best = eligible.length
+            ? eligible.reduce((p,c) => (c.win_rate > p.win_rate ? c : p), eligible[0]).k : null;
+              
+          el.innerHTML = `
+           <div style="margin-top:12px; border:1px solid #eee; border-radius:12px; padding:12px;">
+             <div style="font-weight:800; margin-bottom:8px;">Mulligan impact</div>
+             <table style="width:100%; border-collapse:collapse; font-size:14px;">
+               <thead>
+                 <tr>
+                   <th style="text-align:left; padding:6px; border-bottom:1px solid #eee;">Mulligans</th>
+                   <th style="text-align:right; padding:6px; border-bottom:1px solid #eee;">Games</th>
+                   <th style="text-align:right; padding:6px; border-bottom:1px solid #eee;">Wins</th>
+                   <th style="text-align:right; padding:6px; border-bottom:1px solid #eee;">Win%</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 ${rows.map(r => {
+                   const isBest = r.k === best;
+                   
+                   const mullCell = `
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span>${escapeHtml(r.k)}</span>
+                        ${isBest ? `
+                            <span style="
+                              font-size:12px;
+                              padding:2px 6px;
+                              border-radius:999px;
+                              background:#e6f4ea;
+                              border:1px solid #c7e9cf;
+                              font-weight:700;">
+                              🏆
+                            </span>
+                        ` : ""}
+                      </div>
+                   `;
+                     
+                   return `
+                     <tr>
+                       <td style="padding:6px; border-bottom:1px solid #f2f2f2; font-weight:700;">${mullCell}</td>
+                       <td style="padding:6px; border-bottom:1px solid #f2f2f2; text-align:right;">${r.games}</td>
+                       <td style="padding:6px; border-bottom:1px solid #f2f2f2; text-align:right;">${r.wins}</td>
+                       <td style="padding:6px; border-bottom:1px solid #f2f2f2; text-align:right;">${pct(r.win_rate)}</td>
+                     </tr>
+                   `;
+                 }).join("")}
+               </tbody>
+             </table>
+           </div>
+         `;
+      }
+      
+      function renderTurnOrder(turnOrderObj) {
+          const el = document.getElementById("turnOrderBox");
+          if (!el) return;
+          
+          if (!turnOrderObj || Object.keys(turnOrderObj).length === 0) {
+              el.innerHTML = `<div class="hint">No turn order stats yet.</div>`;
+              return;
+          }
+          
+          const seats = Object.keys(turnOrderObj).sort((a, b) => Number(a) - Number(b));
+          
+          let bestSeat = null;
+          let bestWR = -1;
+          
+          for (const seat of seats) {
+              const v = turnOrderObj[seat] || {};
+              const games = v.games ?? 0;
+              const wins = v.wins ?? 0;
+              const wr = v.win_rate ?? (games ? wins / games : null);
+              
+              if (games >= 2 && wr !== null && wr > bestWR) {
+                  bestSeat = seat;
+                  bestWR = wr;
+              }
+          }
+          
+          const rows = seats.map(seat => {
+              const v = turnOrderObj[seat] || {};
+              const games = v.games ?? 0;
+              const wins = v.wins ?? 0;
+              const wr = v.win_rate ?? (games ? wins / games : null);
+              
+              const isBest = seat === bestSeat;
+              
+              const seatCell = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span>${escapeHtml(seat)}</span>
+                  ${isBest ? `
+                    <span style="
+                      font-size:12px;
+                      padding:2px 6px;
+                      border-radius:999px;
+                      background:#e6f4ea;
+                      border:1px solid #c7e9cf;
+                      font-weight:700;">
+                      🏆
+                    </span>
+                  ` : ""}
+                </div>
+              `;
+              
+              return `
+                <tr>
+                  <td style="padding:6px; border-bottom:1px solid #f2f2f2; font-weight:700;">${seatCell}</td>
+                  <td style="padding:6px; border-bottom:1px solid #f2f2f2; text-align:right;">${escapeHtml(String(games))}</td>
+                  <td style="padding:6px; border-bottom:1px solid #f2f2f2; text-align:right;">${escapeHtml(String(wins))}</td>
+                  <td style="padding:6px; border-bottom:1px solid #f2f2f2; text-align:right;">${escapeHtml(pct(wr))}</td>
+                </tr>
+              `;
+          }).join("");
+          
+          el.innerHTML = `
+            <div style="margin-top:12px; border:1px solid #eee; border-radius:12px; padding:12px;">
+              <div style="font-weight:800; margin-bottom:8px;">Win rate by turn order</div>
+              <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                <thead>
+                  <tr>
+                    <th style="text-align:left; padding:6px; border-bottom:1px solid #eee;">Seat</th>
+                    <th style="text-align:right; padding:6px; border-bottom:1px solid #eee;">Games</th>
+                    <th style="text-align:right; padding:6px; border-bottom:1px solid #eee;">Wins</th>
+                    <th style="text-align:right; padding:6px; border-bottom:1px solid #eee;">Win%</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `;
+      }
+
+      function parseOpponents() {
+        const lines = elOpp.value
+          .split("\n")
+          .map(s => s.trim())
+          .filter(Boolean)
+
+        const names = [];
+        const ids = [];
+
+        for (const line of lines) {
+          names.push(line);
+
+          const wholeId = nameToId.get(line);
+          if (wholeId) {
+            ids.push([wholeId]);
+            continue;
+          }
+
+          const parts = line.split("//").map(s => s.trim()).filter(Boolean);
+
+          const partIds = parts.map(p => nameToId.get(p));
+          ids.push(partIds.length ? partIds : [null]);
+        }
+
+        return { names, ids };
+      }
+
+      function asIntOrUndef(v) {
+        const s = (v ?? "").toString().trim();
+        if (!s) return undefined;
+        const n = Number(s);
+        return Number.isFinite(n) ? Math.trunc(n) : undefined;
+      }
+
+      function addMetric(metrics, key, value) {
+        if (value === undefined || value === null) return;
+        if (typeof value === "string" && value.trim() === "") return;
+        metrics[key] = value;
+      }
+
+      function buildMetrics() {
+        const metrics = {};
+
+        addMetric(metrics, "turns", asIntOrUndef(elTurns.value));
+        addMetric(metrics, "mulligan_note", elMulliganNote.value?.trim());
+
+        addMetric(metrics, "missed_land_drops", asIntOrUndef(elMissedLandDrops.value));
+
+        // Only include booleans if checked (keeps it sparse)
+        if (elManaFlooded.checked) metrics["mana_flooded"] = true;
+        if (elSolRingOpening.checked) metrics["sol_ring_opening_hand"] = true;
+        if (elSolRingCast.checked) metrics["sol_ring_cast"] = true;
+
+        addMetric(metrics, "feeling", asIntOrUndef(elFeeling.value));
+        addMetric(metrics, "feeling_note", elFeelingNote.value?.trim());
+
+        return Object.keys(metrics).length ? metrics : undefined;
+      }
+      
+      function renderSelectedDeckInfo() {
+          const container = document.getElementById("deckInfo");
+          if (!container) return;
+          
+          const deckId = elDeck.value;
+          const d = (DECKS || []).find(x => String(x.deck_id) === String(deckId));
+          
+          if (!d) {
+              container.innerHTML = "";
+              return;
+          }
+          
+          const tz = getDeviceTimeZone();
+          const commander = d.commander ? escapeHtml(d.commander) : "Commander unknown";
+          const img = d.featured ? escapeHtml(d.featured) : "";
+          const lastTs = d.last_played_at;
+          const lastPlayed = lastTs ? formatInTimeZone(lastTs, tz) : "Never";
+          
+          const badgeKind = lastTs ? "updated" : "new";
+          const badge = d.updated_since_last_played
+            ? `<button type="button"
+                  class="badgeBtn selectedDeckDiffBadge"
+                  data-deck-id="${escapeHtml(deckId)}"
+                  data-badge-kind="${badgeKind}"
+                  title="See changes since last played">
+                  ${lastTs ? "Updated" : "New"}
+               </button>`
+            : "";
+
+          container.innerHTML = `
+            <div id="selectedDeckCard" style="display:flex; gap:12px; align-items:center;
+                  padding:10px; border-radius:12px; border:1px solid #ddd; background:#fff;">
+              <div style="width:52px; height:52px; border-radius:10px; overflow:hidden; border:1px solid #eee; flex:0 0 auto;
+                    background:#fafafa; display:flex; align-items:center; justify-content:center;">
+                ${img ? `<img src="${img}" alt="" style="width:100%; height:100%; object-fit:cover;" />`
+                : `<span class="hint">No img</span>`}
+              </div>
+
+              <div style="flex:1 1 auto; min-width:0;">
+                <div style="display:flex; align-items:center; gap:10px; font-weight:800; font-size:15px; line-height:1.2;">
+                  <span>${commander}</span>
+                  ${badge}
+                </div>
+                <div class="hint" style="margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  Last played: ${escapeHtml(lastPlayed)}
+                </div>
+              </div>
+            </div>
+          `;
+      }
+      
+      function setStatsRow(tbody, label, value) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td style="padding:8px 6px; border-top:1px solid #eee; font-weight:600; width:45%;">${escapeHtml(label)}</td>
+            <td style="padding:8px 6px; border-top:1px solid #eee;">${escapeHtml(value)}</td>
+          `;
+          tbody.appendChild(tr);
+      }
+      
+      function setVersionStatus(msg, ok){
+          elVersionStatus.textContent = msg || "";
+          elVersionStatus.className = "status " + (ok ? "ok" : "err");
+      }
+      
+      function shortHash(h) {
+          if (!h) return "unknown";
+          // show first 8 for readability
+          return h.length > 8 ? (h.slice(0, 8) + "…") : h;
+      }
+
+      function renderVersionsRowsFromStatsOnly(versions, tbody){
+        if (!versions || versions.length === 0) {
+          setVersionStatus("No games for this deck yet.", true);
+          return;
+        }
+        setVersionStatus(`Found ${versions.length} version(s).`, true);
+
+        for (const v of versions) {
+          const tr = document.createElement("tr");
+          const cells = [
+            { html: `<code title="${escapeHtml(v.list_hash || "")}">${shortHash(v.list_hash)}</code>`, align: "left" },
+            { text: v.games ?? "-", align: "right" },
+            { text: v.wins ?? "-", align: "right" },
+            { text: v.losses ?? "-", align: "right" },
+            { text: v.draws ?? "-", align: "right" },
+            { text: pct(v.win_rate), align: "right" },
+            { text: v.avg_turns != null ? Number(v.avg_turns).toFixed(1) : "-", align: "right" },
+            { text: v.avg_mulligans != null ? Number(v.avg_mulligans).toFixed(1) : "-", align: "right" },
+            { text: v.avg_mld != null ? Number(v.avg_mld).toFixed(1) : "-", align: "right" },
+            { text: v.avg_feeling != null ? Number(v.avg_feeling).toFixed(1) : "-", align: "right" },
+            { text: formatInTimeZone(v.first_played_at), align: "left" },
+            { text: formatInTimeZone(v.last_played_at), align: "left" }
+          ];
+
+          for (const c of cells) {
+            const td = document.createElement("td");
+            td.style.padding = "8px";
+            td.style.borderBottom = "1px solid #f2f2f2";
+            td.style.textAlign = c.align || "left";
+            if (c.html != null) td.innerHTML = c.html;
+            else td.textContent = String(c.text ?? "");
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+      }
+
+      function renderInitialDecklistFromDiff(data) {
+        const tz = getDeviceTimeZone();
+        openDiffModal();
+        renderDiffLoading();
+        const d = (DECKS || []).find(x => String(x.deck_id) === String(data.deck_id));
+        const title = d?.name ? d.name : `Deck ${deck_id}`;
+
+        document.getElementById("diffTitle").textContent = title;
+        document.getElementById("diffSubtitle").textContent = "Initial decklist";
+
+        const added = data.added || [];
+
+        document.getElementById("diffBody").innerHTML = `
+          ${renderDiffList("Decklist", added)}
+        `;
+      }
+
+      function renderDiffFromData(data) {
+        const tz = getDeviceTimeZone();
+        openDiffModal();
+        renderDiffLoading();
+        const d = (DECKS || []).find(x => String(x.deck_id) === String(data.deck_id));
+        const title = d?.name ? d.name : `Deck ${deck_id}`;
+
+        document.getElementById("diffTitle").textContent = title;
+        document.getElementById("diffSubtitle").textContent = `Changes ${formatInTimeZone(data.base_date, getDeviceTimeZone())} from  to ${formatInTimeZone(data.compare_date, getDeviceTimeZone())}`;
+      
+        const added = data.added || [];
+        const removed = data.removed || [];
+
+        document.getElementById("diffBody").innerHTML = `
+          ${renderDiffList("Added", added)}
+          ${renderDiffList("Removed", removed)}
+        `;
+      }
+
+      // async function loadCardsIndex() {
+        // try {
+          // const res = await fetch("data/commanders_index.json");
+          // COMMANDERS = await res.json();
+        // } catch (err) {
+          // console.error("Failed to load cards index:", err);
+        // }
+      // }
+
+      async function loadCardsIndex() {
+        try {
+          const res = await fetch(`data/commanders_index.json?v=${Date.now()}`, {
+            cache: "no-store"
+          });
+          COMMANDERS = await res.json();
+        } catch (err) {
+          console.error("Failed to load cards index:", err);
+        }
+      }
+      
+      async function loadDeckDiff(deckId, baseDate, compareDate, baseEmpty=false) {
+        let url = `${API_BASE_URL}/decks/${encodeURIComponent(deckId)}/diff`;
+
+        const qs = [];
+        if (baseDate) qs.push(`baseDate=${encodeURIComponent(baseDate)}`);
+        if (compareDate) qs.push(`compareDate=${encodeURIComponent(compareDate)}`);
+        if (baseEmpty) qs.push(`baseEmpty=true`);
+        if (qs.length) url += `?${qs.join("&")}`;
+
+        const res = await apiFetch(url);
+        const txt = await res.text();
+        if (!res.ok) throw new Error(`Error (${res.status}): ${txt}`);
+        return JSON.parse(txt);
+      }
+
+      async function showDeckDiff(deckId, kind) {
+        ACTIVE_DIFF_DECK_ID = deckId;
+
+        const d = (DECKS || []).find(x => String(x.deck_id) === String(deckId));
+        const title = d?.name ? d.name : `Deck ${deck_id}`;
+
+        elDiffTitle.textContent = title;
+        elDiffSubtitle.textContent = "Loading...";
+
+        openDiffModal();
+        renderDiffLoading();
+
+        try {
+          const data = await loadDeckDiff(deckId);
+          
+          const tz = getDeviceTimeZone();
+          const base = data.base_date ? formatInTimeZone(data.base_date, tz) : "unknown";
+          const compare = data.compare_date ? formatInTimeZone(data.compare_date, tz) : "now";
+          elDiffSubtitle.textContent = `Changes from ${base} to ${compare}`;
+
+          const added = data.added || [];
+          const removed = data.removed || [];
+
+          if (added.length === 0 && removed.length === 0) {
+            renderDiffEmpty(kind);
+            return;
+          }
+
+          elDiffBody.innerHTML = `
+            <div class=diffCols">
+              ${renderDiffList("Added", added)}
+              ${renderDiffList("Removed", removed)}
+            </div>
+          `;
+        } catch (err) {
+          renderDiffError(err?.message || String(err));
+        }
+      }
+
+      async function loadPerDeckStats() {
+        const elTable = document.getElementById("versionsTable");
+        const tbody = elTable.querySelector("tbody");
+        tbody.innerHTML = "";
+
+        const statRes = await apiFetch(`${API_BASE_URL}/stats/version?deck_id=${encodeURIComponent(elDeck.value)}`);
+        const statsTxt = await statRes.text();
+        if (!statRes.ok) {
+          setVersionStatus(`Error loading stats (${statRes.status}): ${statsTxt}`, false);
+          return;
+        }
+        const statsData = JSON.parse(statsTxt);
+        const total = (statsData.total || []);
+        const playedVersions = (statsData.versions || []);
+
+        const logRes = await apiFetch(`${API_BASE_URL}/decks/${encodeURIComponent(elDeck.value)}`);
+        const logTxt = await logRes.text();
+        if (!logRes.ok) {
+          setVersionStatus(`Loaded played versions (${playedVersions.length}), but could not load change log (${logRes.status}).`, true);
+          renderVersionsRowsFromStatsOnly(playedVersions, tbody);
+          return;
+        }
+        const logData = JSON.parse(logTxt);
+        const logRows = Array.isArray(logData) ? logData : (logData.items || logData.rows || []);
+        const allVersions = buildAllVersions(logRows);
+
+        if (!allVersions.length) {
+          if (!playedVersions.length) {
+            setVersionStatus("No versions found yet.", true);
+            return;
+          }
+          setVersionStatus(`Found ${playedVersions.length} played version(s).`, true);
+          renderVersionsRowsFromStatsOnly(playedVersions, tbody);
+          return;
+        }
+
+        const statsByHash = buildStatsByHash(playedVersions);
+
+        setVersionStatus(`Found ${allVersions.length} total version(s), ${playedVersions.length} played.`, true);
+
+        const tr = document.createElement("tr");
+        const cells = [
+          { html: `<span class="totalCell">TOTAL</span>`, align: "left" },
+          { text: total?.games ?? 0, align: "right" },
+          { text: total?.wins ?? 0, align: "right" },
+          { text: total?.losses ?? 0, align: "right" },
+          { text: total?.draws ?? 0, align: "right" },
+          { text: total ? pct(total.win_rate) : "-", align: "right" },
+          { text: total?.avg_turns != null ? Number(total.avg_turns).toFixed(1) : "-", align: "right" },
+          { text: total?.avg_mulligans != null ? Number(total.avg_mulligans).toFixed(1) : "-", align: "right" },
+          { text: total?.avg_mld != null ? Number(total.avg_mld).toFixed(1) : "-", align: "right" },
+          { text: total?.avg_feeling != null ? Number(total.avg_feeling).toFixed(1) : "-", align: "right" },
+          { text: total ? formatInTimeZone(total.first_played): "-", align: "left" },
+          { text: total ? formatInTimeZone(total.last_played): "-", align: "left" },
+        ];
+        for (const c of cells) {
+          const td = document.createElement("td");
+          td.style.padding = "8px";
+          td.style.borderBottom = "1px solid #f2f2f2";
+          td.style.textAlign = c.align || "left";
+          if (c.html != null) td.innerHTML = c.html;
+          else td.textContent = String(c.text ?? "");
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+
+        for (let i = 0; i < allVersions.length; i++) {
+          const v = allVersions[i];
+          const prev = (i + 1 < allVersions.length) ? allVersions[i + 1] : null;
+
+          const stats = statsByHash.get(v.list_hash);
+
+          const games = stats?.games ?? 0;
+          const wins = stats?.wins ?? 0;
+          const losses = stats?.losses ?? 0;
+          const draws = stats?.draws ?? 0;
+
+          const tr = document.createElement("tr");
+
+          const versionCellHtml = `
+            <button type="button"
+              class="versionLink"
+              data-deck-id="${escapeHtml(elDeck.value)}"
+              data-compare-date="${escapeHtml(v.changed_at)}"
+              ${prev ? `data-base-date="${escapeHtml(prev.changed_at)}"` : ""}
+              data-is-first="${prev ? "0" : "1"}"
+              title="${escapeHtml(v.list_hash)}">
+              ${escapeHtml(fmtVersionLabel(v))}
+            </button>
+          `;
+
+          const cells = [
+            { html: versionCellHtml, align: "left" },
+            { text: games, align: "right" },
+            { text: wins, align: "right" },
+            { text: losses, align: "right" },
+            { text: draws, align: "right" },
+            { text: stats ? pct(stats.win_rate) : "-", align: "right" },
+            { text: stats?.avg_turns != null ? Number(stats.avg_turns).toFixed(1) : "-", align: "right" },
+            { text: stats?.avg_mulligans != null ? Number(stats.avg_mulligans).toFixed(1) : "-", align: "right" },
+            { text: stats?.avg_mld != null ? Number(stats.avg_mld).toFixed(1) : "-", align: "right" },
+            { text: stats?.avg_feeling != null ? Number(stats.avg_feeling).toFixed(1) : "-", align: "right" },
+            { text: stats ? formatInTimeZone(stats.first_played_at) : "-", align: "left" },
+            { text: stats ? formatInTimeZone(stats.last_played_at) : "-", align: "left" }
+          ];
+
+          for (const c of cells) {
+            const td = document.createElement("td");
+            td.style.padding = "8px";
+            td.style.borderBottom = "1px solid #f2f2f2";
+            td.style.textAlign = c.align || "left";
+            if (c.html != null) td.innerHTML = c.html;
+            else td.textContent = String(c.text ?? "");
+            tr.appendChild(td);
+          }
+
+          tbody.appendChild(tr);
+        }
+      }
+      
+      async function loadStats() {
+          const elTable = document.getElementById("statsTable");
+          const elTop = document.getElementById("topDecks");
+          if (!elTable || !elTop) return;
+          
+          const tbody = elTable.querySelector("tbody");
+          tbody.innerHTML = "";
+          elTop.innerHTML = `<div class="hint">Loading...</div>`;
+          
+          const res = await apiFetch(`${API_BASE_URL}/stats/summary`);
+          const txt = await res.text();
+          if (!res.ok) {
+              elTop.innerHTML = `<div class="status err">Error (${res.status}): ${escapeHtml(txt)}</div>`;
+              return;
+          }
+          
+          const data = JSON.parse(txt);
+          
+          renderMulliganTable(data.mulligans);
+          
+          renderTurnOrder(data.turn_order);
+          
+          setStatsRow(tbody, "Total games", String(data.total_games ?? 0));
+          setStatsRow(tbody, "Win rate", pct(data.win_rate));
+          if (data.avg_mulligans !== null && data.avg_mulligans !== undefined) {
+              setStatsRow(tbody, "Avg mulligans", Number(data.avg_mulligans).toFixed(2));
+          }
+          
+          const rows = (data.by_deck || []);
+          if (rows.length === 0) {
+              elTop.innerHTML = `<div class="hint">No deck stats yet.</div>`;
+              return;
+          }
+          
+          elTop.innerHTML = `
+            <div style="margin-top:10px; font-weight:700;">Top decks</div>
+            ${rows.map(d => `
+              <div style="border:1px solid #eee; border-radius:12px; padding:10px; margin-top:8px;">
+                <div style="font-weight:700;">${escapeHtml(d.deck_name || d.deck_id)}</div>
+                <div class="hint">Games: ${d.games} · WR: ${pct(d.win_rate)} (W${d.wins} L${d.losses} D${d.draws})</div>
+                <div class="hint">Last played at: ${formatInTimeZone(d.last_played_at, getDeviceTimeZone())}</div>
+              </div>
+            `).join("")}
+          `;
+      }
+      
+      async function pickDecks() {
+        const count = Math.max(1, Math.min(10, parseInt(elPickCount.value || "3", 10)));
+        elPickCount.value = String(count);
+
+        localStorage.setItem("last_pick_count", String(count));
+
+        elPickBtn.disabled = true;
+        elPickHint.textContent = "Picking decks...";
+        elPickResults.innerHTML = "";
+
+        const res = await apiFetch(`${API_BASE_URL}/pick?count=${encodeURIComponent(count)}`);
+        const txt = await res.text();
+
+        if (!res.ok) {
+          elPickHint.textContent = "";
+          elPickResults.innerHTML = `<div class="status err">Error (${res.status}): ${escapeHtml(txt)}</div>`;
+          elPickBtn.disabled = false;
+          return;
+        }
+
+        const data = JSON.parse(txt);
+        elPickHint.textContent = `Picked ${data.picked?.length || 0} deck(s). Tap one to select it in the form.`;
+        renderPickResults(data.picked || []);
+
+        elPickBtn.disabled = false;
+      }
+
+      async function loadDecks() {
+        setStatus("Loading decks...", true);
+
+        const decksRes = await apiFetch(`${API_BASE_URL}/decks`);
+
+        if (!decksRes.ok) throw new Error(`Failed to load decks (${decksRes.status})`);
+        const decks = await decksRes.json();
+
+        // cache
+        DECKS = decks;
+
+        // populate dropdown (your existing logic)
+        elDeck.innerHTML = "";
+        const lastDeckId = localStorage.getItem("last_deck_id");
+
+        for (const d of decks) {
+          const opt = document.createElement("option");
+          opt.value = d.deck_id;
+          const commander = d.commander ? ` | ${d.commander}` : "";
+          opt.textContent = `${d.name || d.deck_id}${commander}`;
+          elDeck.appendChild(opt);
+        }
+
+        if (lastDeckId) elDeck.value = lastDeckId;
+
+        renderSelectedDeckInfo();
+
+        setStatus(`Loaded ${decks.length} decks.`, true);
+
+        loadStats().catch(() => {});
+        loadPerDeckStats().catch(() => {});
+      }
+
+
+      async function submitPlay() {
+        const deck_id = elDeck.value;
+        const started_at = getStartedAt();
+        const { names, ids } = parseOpponents();
+
+        const payload = {
+          deck_id,
+          result: elResult.value,
+          turn_order: asIntOrUndef(elTurnOrder.value),
+          mulligans: asIntOrUndef(elMulligans.value),
+          opponents_commanders: names,
+          opponents_commanders_ids: ids,
+          notes: elNotes.value || "",
+          store: elStore.value || "",
+          started_at: started_at || undefined
+        };
+
+        const metrics = buildMetrics();
+        if (metrics) payload.metrics = metrics;
+
+        elSubmit.disabled = true;
+        setStatus("Submitting...", true);
+
+        const res = await apiFetch(`${API_BASE_URL}/play`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const txt = await res.text();
+        if (!res.ok) {
+          setStatus(`Error (${res.status}): ${txt}`, false);
+          elSubmit.disabled = false;
+          return;
+        }
+
+        localStorage.setItem("last_deck_id", deck_id);
+        localStorage.setItem("last_store", elStore.value || "");
+        setStatus("Logged!", true);
+
+        // Clear “fast entry” fields
+        elOpp.value = "";
+        elNotes.value = "";
+        elTurnOrder.value = "";
+        elMulligans.value = "";
+
+        // Clear advanced fields (optional — comment out if you want to keep them)
+        elTurns.value = "";
+        elMulliganNote.value = "";
+        elMissedLandDrops.value = "";
+        elManaFlooded.checked = false;
+        elSolRingOpening.checked = false;
+        elSolRingCast.checked = false;
+        elFeeling.value = "";
+        elFeelingNote.value = "";
+        
+        // Restart game timer
+        setStartedAt("");
+
+        elSubmit.disabled = false;
+      }
+      
+      async function loadGames() {
+        elGamesBox.textContent = "Loading...";
+        const res = await apiFetch(`${API_BASE_URL}/games`);
+        const txt = await res.text();
+        if (!res.ok) {
+          elGamesBox.textContent = `Error (${res.status}): ${txt}`;
+          return;
+        }
+        const data = JSON.parse(txt);
+
+        const lines = [];
+        const tz = getDeviceTimeZone();
+        
+        for (const g of (data.games || [])) {
+          const when = formatInTimeZone(g.played_at, tz);
+          const deck = g.deck_name || g.deck_id || "";
+          const r = g.result || "";
+          const store = g.store ? ` @ ${g.store}` : "";
+          lines.push(`${when} | ${r} | ${deck}${store}`);
+        }
+        elGamesBox.textContent = lines.join("\n") || "No games yet.";
+       }
+       
+       const lastPickCount = localStorage.getItem("last_pick_count");
+       if (lastPickCount) elPickCount.value = lastPickCount;
+       
+       elPickBtn.addEventListener("click", () => {
+         pickDecks().catch(err => {
+           elPickBtn.disabled = false;
+           elPickHint.textContent = "";
+           elPickResults.innerHTML = `<div class="status err">${escapeHtml(err.message)}</div>`;
+        });
+      });
+
+      async function bootstrapApp() {
+        renderLoggedInState();
+        await loadDecks();
+      }
+
+      async function initApp() {
+        await handleCallbackIfPresent();
+        
+        const token = localStorage.getItem("id_token");
+
+        if (token) {
+          await bootstrapApp();
+        } else {
+          renderLoggedOutState();
+        }
+      }
+      
+      tabLog.addEventListener("click", () => setTab("log"));
+      tabStats.addEventListener("click", () => setTab("stats"));
+      tabRecents.addEventListener("click", () => setTab("recents"));
+      
+      const savedTab = localStorage.getItem("active_tab") || "log";
+      setTab(savedTab);
+
+      elSubmit.addEventListener("click", (e) => {
+        e.preventDefault();
+        submitPlay().catch(err => setStatus(err.message, false));
+      });
+      
+      elClearStore.addEventListener("click", () => {
+          elStore.value = "";
+          localStorage.removeItem("last_store");
+          setStatus("Store cleared.", true);
+      });
+      
+      elStore.addEventListener("input", () => {
+          localStorage.setItem("last_store", elStore.value || "");
+      });
+      
+      elRefreshStats.addEventListener("click", async () => {
+          loadStats();
+          loadPerDeckStats();
+      });
+      
+      elRefreshGames.addEventListener("click", loadGames);
+      
+      elStart.addEventListener("click", () => {
+          setStartedAt(nowIsoUtc());
+      })
+      
+      elClearStart.addEventListener("click", () => {
+          setStartedAt("");
+      })
+      
+      setInterval(renderStartHint, 30000);
+      renderStartHint();
+      
+      elDeck.addEventListener("change", async () => {
+        const deckId = elDeck.value;
+        localStorage.setItem("last_deck_id", deckId);
+        renderSelectedDeckInfo();
+        loadPerDeckStats();
+      });
+
+      document.addEventListener("click", (e) => {
+        const btn = e.target.closest(".selectedDeckDiffBadge");
+        if (!btn) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const deckId = btn.getAttribute("data-deck-id");
+        const kind = btn.getAttribute("data-badge-kind" || "updated");
+        if (!deckId) return;
+
+        showDeckDiff(deckId, kind);
+      });
+
+      elDiffClose.addEventListener("click", closeDiffModal);
+      elDiffOk.addEventListener("click", closeDiffModal);
+      elDiffModal.addEventListener("click", (e) => {
+        if (e.target === elDiffModal) closeDiffModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && elDiffModal.classList.contains("open")) {
+          closeDiffModal();
+          closeImg();
+        }
+      });
+      elDiffRefresh.addEventListener("click", () => {
+        if (!ACTIVE_DIFF_DECK_ID) return;
+        showDeckDiff(ACTIVE_DIFF_DECK_ID, "updated");
+      });
+
+      elOpp.addEventListener("input", () => {
+        const info = getCurrentLine(elOpp);
+        
+        const parts = info.line.split("//");
+        const query = (parts[parts.length - 1] || "").trim();
+
+        clearSuggesstions();
+        
+        if (!query) return;
+
+        const results = searchCards(query);
+
+        showSuggestions(results, elOpp);
+      })
+
+      elOpp.addEventListener("keydown", (e) => {
+        if (e.key === "/" && !e.shiftKey) {
+          const text = elOpp.value;
+          const caret = elOpp.selectionStart;
+
+          if (caret > 0 && text[caret - 1] === "/") {
+            e.preventDefault();
+
+            const before = text.slice(0, caret - 1);
+            const after = text.slice(caret);
+
+            const insert = " // ";
+            elOpp.value = before + insert + after;
+
+            const newCaret = before.length + insert.length;
+            elOpp.setSelectionRange(newCaret, newCaret);
+
+            elOpp.dispatchEvent(new Event("input"));
+          }
+        }
+      })
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".autocomplete")) clearSuggesstions();
+      })
+
+      document.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".versionLink");
+        if (!btn) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const deckId = btn.getAttribute("data-deck-id");
+        const compareDate = btn.getAttribute("data-compare-date");
+        const baseDate = btn.getAttribute("data-base-date");
+        const isFirst = btn.getAttribute("data-is-first") === "1";
+
+        if (!deckId || !compareDate) return;
+
+        if (!isFirst && baseDate) {
+          const data = await loadDeckDiff(deckId, baseDate, compareDate);
+          renderDiffFromData(data);
+          return;
+        }
+        if (isFirst) {
+          const data = await loadDeckDiff(deckId, null, compareDate, true);
+          renderInitialDecklistFromDiff(data);
+          return;
+        }
+
+        openDiffModal();
+        renderDiffLoading();
+        document.getElementById("diffTitle").textContent = "Initial deck version";
+        document.getElementById("diffSubtitle").textContent = "No previous version to compare.";
+        document.getElementById("diffBody").innerHTML = `<div class="hint">This is the first recorded version for this deck.</div>`;
+      });
+
+      document.getElementById("profile-btn").addEventListener("click", async () => {
+        openProfileModal();
+        await loadProfileModal();
+      });
+
+      document.getElementById("profileCloseBtn").addEventListener("click", closeProfileModal);
+      document.getElementById("profileModalBackdrop").addEventListener("click", closeProfileModal);
+      document.getElementById("profileSaveBtn").addEventListener("click", saveProfileFromModal);
+
+      elImgClose.addEventListener("click", closeImg);
+      elImgOverlay.addEventListener("click", (e) => {
+        if (e.target === elImgOverlay) closeImg();
+      });
+
+      document.addEventListener("click", (e) => {
+        const row = e.target.closest(".cardPreviewItem");
+        if (!row) return;
+
+        const url = row.getAttribute("data-img-normal");
+        openImg(url);
+      });
+      
+      document.getElementById("archidektEditBtn").addEventListener("click", () => {
+        setArchidektEditMode(!archidektEditMode);
+      });
+
+      document.getElementById("tzHint").textContent = `Times shown in your device timezone: ${getDeviceTimeZone()}`;
+
+      await initApp();
+      loadCardsIndex();
+      
+      window.addEventListener("error", (e) => {
+        const msg = `JS Error: ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`
+        console.log(e);
+        try { setStatus(msg, false); } catch (_) {}
+      });
+
+      window.cognitoLogin = login;
+      window.cognitoLogout = logout;
+      window.apiFetch = apiFetch;
+    });
+  </script>
+</body>
+</html>

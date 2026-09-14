@@ -11,6 +11,24 @@ Parameters:
   GeneratedBucketName:
     Type: String
 
+  CustomDomainName:
+    Type: String
+    Default: ""
+
+  CustomDomainCertificateArn:
+    Type: String
+    Default: ""
+
+  CustomDomainHostedZoneId:
+    Type: String
+    Default: ""
+
+Conditions:
+  HasCustomDomain: !And
+    - !Not [!Equals [!Ref CustomDomainName, ""]]
+    - !Not [!Equals [!Ref CustomDomainCertificateArn, ""]]
+    - !Not [!Equals [!Ref CustomDomainHostedZoneId, ""]]
+
 Resources:
   WebBucket:
     Type: AWS::S3::Bucket
@@ -76,6 +94,11 @@ Resources:
         IPV6Enabled: true
         PriceClass: PriceClass_100
 
+        Aliases: !If
+          - HasCustomDomain
+          - - !Ref CustomDomainName
+          - !Ref AWS::NoValue
+
         Origins:
           - Id: WebOrigin
             DomainName: !GetAtt WebBucket.RegionalDomainName
@@ -122,8 +145,36 @@ Resources:
             Compress: true
             CachePolicyId: !Ref GeneratedDataCachePolicy
 
-        ViewerCertificate:
-          CloudFrontDefaultCertificate: true
+        ViewerCertificate: !If
+          - HasCustomDomain
+          - AcmCertificateArn: !Ref CustomDomainCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+
+  FrontendIPv4Record:
+    Condition: HasCustomDomain
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref CustomDomainHostedZoneId
+      Name: !Ref CustomDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
+  FrontendIPv6Record:
+    Condition: HasCustomDomain
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref CustomDomainHostedZoneId
+      Name: !Ref CustomDomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
 
   WebBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -172,4 +223,7 @@ Outputs:
     Value: !GetAtt Distribution.DomainName
 
   FrontendUrl:
-    Value: !Sub https://${Distribution.DomainName}
+    Value: !If
+      - HasCustomDomain
+      - !Sub https://${CustomDomainName}
+      - !Sub https://${Distribution.DomainName}
