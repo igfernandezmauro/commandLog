@@ -80,6 +80,53 @@ def should_keep_state(state: dict) -> bool:
 
     return True
 
+def should_keep_snapshot_key(key: str | None) -> bool:
+    if not key:
+        return False
+
+    if not key.startswith("archidekt/"):
+        return False
+
+    username = archidekt_username_from_key(key)
+
+    if username in EXCLUDED_ARCHIDEKT_USERS:
+        return False
+
+    return True
+
+def migrate_change_snapshots(*, change_table, s3, apply: bool, stats: MigrationStats) -> None:
+    print("=== CHANGE LOG SNAPSHOT AUDIT ===")
+
+    changes = scan_all(change_table)
+    seen_keys: set[str] = set()
+
+    for change in changes:
+        raw_key = change.get("s3_key")
+
+        if not raw_key:
+            continue
+
+        key = str(raw_key)
+
+        if not should_keep_snapshot_key(key):
+            stats.skipped += 1
+            continue
+
+        if key in seen_keys:
+            continue
+
+        seen_keys.add(key)
+
+        copy_object(
+            s3=s3,
+            key=key,
+            apply=apply,
+            stats=stats
+        )
+
+    print(f"Audited {len(seen_keys)} unique snapshot references.")
+    print()
+
 def get_changes(change_table, deck_id: str) -> list[dict]:
     response = change_table.query(
         KeyConditionExpression=Key("deck_id").eq(deck_id),
@@ -138,7 +185,7 @@ def copy_object(*, s3, key: str, apply: bool, stats: MigrationStats) -> None:
     print(f"{'COPY' if apply else 'WOULD COPY':10}  {key}")
     stats.copied += 1
 
-def migrate(*, apply: bool) -> int:
+def migrate(*, apply: bool, repair_state: bool) -> int:
     dynamodb = boto3.resource("dynamodb", region_name=REGION)
     s3 = boto3.client("s3",region_name=REGION)
 
@@ -150,69 +197,104 @@ def migrate(*, apply: bool) -> int:
     retained_states = [ state for state in states if should_keep_state(state) ]
 
     stats = MigrationStats()
+
+    migrate_change_snapshots(change_table=change_table, s3=s3, apply=apply, stats=stats)
+
     print("=== COMMANDLOG PRODUCTION SNAPSHOT MIGRATION ===")
     print(f"mode={'APPLY' if apply else 'DRY RUN'}")
     print(f"source={SOURCE_BUCKET}")
     print(f"destination={DESTINATION_BUCKET}")
     print()
 
-    for state in retained_states:
-        deck_id = str(state["deck_id"])
-        current_hash = state.get("list_hash")
-        current_key = state.get("raw_s3_key")
+    if repair_state:
+        for state in retained_states:
+            deck_id = str(state["deck_id"])
+            current_hash = state.get("list_hash")
+            current_key = state.get("raw_s3_key")
 
-        username = archidekt_username_from_key(current_key)
+            username = archidekt_username_from_key(current_key)
 
-        print(f"=== deck={deck_id}  user={username} ===")
+            print(f"=== deck={deck_id}    user={username} ===")
 
-        changes = get_changes(change_table, deck_id)
+            changes = get_changes(change_table, deck_id)
 
-        retained_changes = []
+            retained_changes = []
 
-        for change in changes:
-            key = change.get("s3_key")
+            for change in changes:
+                key = change.get("s3_key")
 
-            if not key:
+                if not key:
+                    continue
+
+                key = str(key)
+
+                if not should_keep_snapshot_key(key):
+                    continue
+
+                retained_changes.append(change)
+
+            # Prefer preserving the stat;s existing raw_s3_key.
+            if current_key and should_keep_snapshot_key(str(current_key)):
+                current_key = str(current_key)
+
+                if object_exists(s3, DESTINATION_BUCKET, current_key):
+                    print(f"CURRENT EXISTS {current_key}")
+                    print()
+                    continue
+
+                if object_exists(s3, SOURCE_BUCKET, current_key):
+                    copy_object(
+                        s3=s3,
+                        key=current_key,
+                        apply=apply,
+                        stats=stats
+                    )
+
+                    print()
+                    continue
+
+            if current_key:
+                print(f"CURRENT MISSING {current_key}")
+            else:
+                print("CURRENT MISSING  <no raw_s3_key>")
+
+            recovery_key = find_recovery_key(
+                s3=s3,
+                changes=retained_changes,
+                current_hash=current_hash
+            )
+
+            if not recovery_key:
+                print(f"UNRESOLVED  deck={deck_id}  hash={current_hash}")
+                stats.unresolved += 1
+                print()
                 continue
 
-            key = str(key)
+            copy_object(
+                s3=s3,
+                key=recovery_key,
+                apply=apply,
+                stats=stats
+            )
 
-            key_username = archidekt_username_from_key(key)
-
-            if key_username in EXCLUDED_ARCHIDEKT_USERS:
-                stats.skipped += 1
-                continue
-
-            if not key.startswith("archidekt/"):
-                stats.skipped += 1
-                continue
-
-            retained_changes.append(change)
-
-            copy_object(s3=s3, key=key, apply=apply, stats=stats)
-
-        recovery_key = find_recovery_key(s3=s3, changes=retained_changes, current_hash=current_hash)
-
-        if not recovery_key:
-            print(f"UNRESOLVED  deck={deck_id}  hash={current_hash}")
-            stats.unresolved += 1
-            print()
-            continue
-
-        copy_object(s3=s3, key=key, apply=apply, stats=stats)
-
-        if current_key != recovery_key:
             if apply:
                 state_table.update_item(
-                    Key={ "user_key": state["user_key"], "deck_id": state["deck_id"] },
-                    UpdateExpression=( "SET raw_s3_key = :key" ),
-                    ExpressionAttributeValues={ ":key": recovery_key }
+                    Key={
+                        "user_key": state["user_key"],
+                        "deck_id": state["deck_id"]
+                    },
+                    UpdateExpression="SET raw_s3_key = :key",
+                    ExpressionAttributeValues={
+                        ":key": recovery_key
+                    }
                 )
 
-            print(f"{'REPAIRED' if apply else 'WOULD REPAIR'}   raw_s3_key -> {recovery_key}")
+            print(
+                f"{'REPAIRED' if apply else 'WOULD REPAIR'}"
+                f"raw_s3_key -> {recovery_key}"
+            )
             stats.repaired += 1
-
-        print()
+            print()
 
     print("=== SUMMARY ===")
     print(f"copied={stats.copied}")
@@ -222,7 +304,7 @@ def migrate(*, apply: bool) -> int:
     print(f"repaired={stats.repaired}")
     print(f"unresolved={stats.unresolved}")
 
-    if stats.unresolved:
+    if stats.unresolved or stats.missing_source:
         return 1
 
     return 0
@@ -241,6 +323,12 @@ def parse_args():
         )
     )
 
+    parser.add_argument(
+        "--repair-state",
+        action="store_true",
+        help="Also repair deck_state raw_s3_key pointers."
+    )
+
     return parser.parse_args()
 
 def main():
@@ -256,7 +344,10 @@ def main():
             print("Aborted.")
             return 2
 
-    return migrate(apply=args.apply)
+    return migrate(
+        apply=args.apply,
+        repair_state=args.repair_state
+    )
 
 if __name__ == "__main__":
     sys.exit(main())
