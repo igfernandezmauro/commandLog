@@ -1060,6 +1060,178 @@ prod_smoke_test() {
 }
 
 
+local_app() {
+    echo "========================================"
+    echo " Starting CommandLog locally"
+    echo "========================================"
+    echo
+
+    local compose_file="local/docker-compose.yml"
+    local compose_env="local/.env.local"
+    local sam_pid=""
+    local frontend_pid=""
+
+    if [[ ! -f "$compose_env" ]]; then
+        echo "FAIL: ${compose_env} does not exist." >&2
+        echo "Create it with LOCALSTACK_AUTH_TOKEN before starting local development." >&2
+        return 1
+    fi
+
+    cleanup() {
+        echo
+        echo "Stopping local API and frontend..."
+
+        if [[ -n "$sam_pid" ]]; then
+            kill "$sam_pid" 2>/dev/null || true
+        fi
+
+        if [[ -n "$frontend_pid" ]]; then
+            kill "$frontend_pid" 2>/dev/null || true
+        fi
+
+        wait "$sam_pid" 2>/dev/null || true
+        wait "$frontend_pid" 2>/dev/null || true
+    }
+
+    trap cleanup EXIT INT TERM
+
+    echo "Starting LocalStack..."
+
+    docker compose \
+        --env-file "$compose_env" \
+        -f "$compose_file" \
+        up -d
+
+    echo "Waiting for LocalStack..."
+
+    local localstack_ready=false
+
+    for _ in $(seq 1 30); do
+        if curl -fsS \
+            http://localhost:4566/_localstack/health \
+            >/dev/null 2>&1; then
+            localstack_ready=true
+            break
+        fi
+
+        sleep 1
+    done
+
+    if [[ "$localstack_ready" != "true" ]]; then
+        echo "FAIL: LocalStack did not become healthy." >&2
+
+        docker compose \
+            --env-file "$compose_env" \
+            -f "$compose_file" \
+            logs --tail=50
+
+        return 1
+    fi
+
+    echo "LocalStack is healthy."
+
+    echo
+    echo "Seeding local data..."
+
+    python3 scripts/seed_local.py
+
+    echo
+    echo "Building SAM application..."
+
+    rm -rf .aws-sam
+
+    sam build \
+        --template-file infrastructure/template.yaml
+
+    echo
+    echo "Starting local API..."
+
+    sam local start-api \
+        --template-file .aws-sam/build/template.yaml \
+        --env-vars backend/tests/env.local.json \
+        --parameter-overrides \
+            ParameterKey=AppEnvironment,ParameterValue=local \
+            ParameterKey=FrontendOrigin,ParameterValue=http://localhost:8080 \
+        --port 3000 &
+
+    sam_pid=$!
+
+    echo "Waiting for local API..."
+
+    local api_ready=false
+
+    for _ in $(seq 1 30); do
+        if curl -fsS \
+            http://localhost:3000/decks \
+            >/dev/null 2>&1; then
+            api_ready=true
+            break
+        fi
+
+        sleep 1
+    done
+
+    if [[ "$api_ready" != "true" ]]; then
+        echo "FAIL: local API did not become ready." >&2
+        return 1
+    fi
+
+    echo "Local API is ready."
+
+    echo
+    echo "Starting local frontend..."
+
+    python3 -m http.server \
+        8080 \
+        --directory frontend &
+
+    frontend_pid=$!
+
+    sleep 1
+
+    if ! kill -0 "$frontend_pid" 2>/dev/null; then
+        echo "FAIL: local frontend failed to start." >&2
+        return 1
+    fi
+
+    echo
+    echo "========================================"
+    echo " CommandLog local is running"
+    echo "========================================"
+    echo
+    echo "Frontend:     http://localhost:8080"
+    echo "API:          http://localhost:3000"
+    echo "LocalStack:   http://localhost:4566"
+    echo
+    echo "Press Ctrl+C to stop the API and frontend."
+    echo "LocalStack will remain running."
+    echo "Run './scripts/dev local-down' to stop it."
+    echo
+
+    wait
+}
+
+local_down() {
+    local compose_file="local/docker-compose.yml"
+    local compose_env="local/.env.local"
+
+    echo "Stopping CommandLog local infrastructure..."
+
+    if [[ -f "$compose_env" ]]; then
+        docker compose \
+            --env-file "$compose_env" \
+            -f "$compose_file" \
+            down
+    else
+        docker compose \
+            -f "$compose_file" \
+            down
+    fi
+
+    echo "Local infrastructure stopped."
+}
+
+
 help() {
     cat <<'HELP'
 CommandLog development commands
@@ -1091,6 +1263,8 @@ Commands:
   activate-prod-automation  Deploy production with background automation enabled
   deploy-prod               Deploy the normal production application
   prod-smoke-test           Run non-destructive production smoke tests
+  local                     Run the complete local CommandLog application
+  local-down                Stop local CommandLog infrastructure
   help                      Show this help
 HELP
 }
@@ -1165,6 +1339,12 @@ case "${1:-help}" in
         ;;
     prod-smoke-test)
         prod_smoke_test
+        ;;
+    local)
+        local_app
+        ;;
+    local-down)
+        local_down
         ;;
     help|-h|--help)
         help

@@ -21,6 +21,7 @@ CARDS_DIM_TABLE = "commandlog_local_cards_dim"
 
 SNAPSHOT_BUCKET = "commandlog-local-snapshots"
 FRONTEND_BUCKET = "commandlog-local-frontend"
+GENERATED_BUCKET = "commandlog-local-generated"
 
 USER_KEY = "user#local-user"
 
@@ -230,6 +231,19 @@ def create_frontend_bucket(s3_client: Any) -> None:
             },
         )
         print(f"Created bucket: {FRONTEND_BUCKET}")
+
+def create_generated_bucket(s3_client: Any) -> None:
+    try:
+        s3_client.head_bucket(Bucket=GENERATED_BUCKET)
+        print(f"Bucket already exists: {GENERATED_BUCKET}")
+    except ClientError:
+        s3_client.create_bucket(
+            Bucket=GENERATED_BUCKET,
+            CreateBucketConfiguration={
+                "LocationConstraint": REGION,
+            },
+        )
+        print(f"Created bucket: {GENERATED_BUCKET}")
 
 def seed_profile(dynamodb: Any) -> None:
     table = dynamodb.Table(USERS_TABLE)

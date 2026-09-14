@@ -12,6 +12,7 @@ __pycache__/
 .DS_Store
 
 local/env.json
+local/.env.local
 
 .env
 .venv/
