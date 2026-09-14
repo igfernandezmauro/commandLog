@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
 import os
+import json
 import sys
 from typing import Any
 
 import boto3
+from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from pathlib import Path
@@ -29,6 +31,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT_FIXTURES = PROJECT_ROOT / "local" / "seed" / "snapshots"
 
 SCRYFALL_LOCAL_KEY = "scryfall/oracle_cards/latest.jsonl.gz"
+
+LOCAL_DIFF_DECK_ID = "local-diff-deck"
+
+LOCAL_DIFF_BASE_DATE = "2026-09-01T12:00:00Z"
+LOCAL_DIFF_COMPARE_DATE = "2026-09-02T12:00:00Z"
+
+LOCAL_DIFF_BASE_KEY = "snapshots/local-diff-check/base.json"
+LOCAL_DIFF_COMPARE_KEY = "snapshots/local-diff-check/compare.json"
+
+LOCAL_DIFF_BASE_HASH = "local-base-v1"
+LOCAL_DIFF_COMPARE_HASH = "local-compare-v2"
 
 def get_dynamodb():
     return boto3.resource(
@@ -447,6 +460,135 @@ def seed_scryfall_fixture(s3_client: Any) -> None:
 
     print(f"Seeded Scryfall fixture: {SCRYFALL_LOCAL_KEY}")
 
+def seed_diff_fixture(dynamodb: Any, s3_client: Any) -> None:
+    state_table = dynamodb.Table(STATE_TABLE)
+    change_table = dynamodb.Table(CHANGE_LOG_TABLE)
+    diff_table = dynamodb.Table(DIFF_TABLE)
+
+    state_table.put_item(
+        Item={
+            "user_key": USER_KEY,
+            "deck_id": LOCAL_DIFF_DECK_ID,
+            "name": "Local Diff Test",
+            "source": "archidekt"
+        }
+    )
+
+    base_snapshot = [
+        {
+            "quantity": 1,
+            "categories": [],
+            "card": {
+                "oracleCard": {
+                    "uid": "sol-ring",
+                    "name": "Sol Ring"
+                }
+            }
+        },
+        {
+            "quantity": 1,
+            "categories": [],
+            "card": {
+                "oracleCard": {
+                    "uid": "arcane-signet",
+                    "name": "Arcane Signet"
+                }
+            }
+        },
+        {
+            "quantity": 1,
+            "categories": [],
+            "card": {
+                "oracleCard": {
+                    "uid": "swamp",
+                    "name": "Swamp"
+                }
+            }
+        }
+    ]
+
+    compare_snapshot = [
+        {
+            "quantity": 1,
+            "categories": [],
+            "card": {
+                "oracleCard": {
+                    "uid": "sol-ring",
+                    "name": "Sol Ring"
+                }
+            }
+        },
+        {
+            "quantity": 1,
+            "categories": [],
+            "card": {
+                "oracleCard": {
+                    "uid": "arcane-signet",
+                    "name": "Arcane Signet"
+                }
+            }
+        },
+        {
+            "quantity": 1,
+            "categories": [],
+            "card": {
+                "oracleCard": {
+                    "uid": "command-tower",
+                    "name": "Command Tower"
+                }
+            }
+        }
+    ]
+
+    s3_client.put_object(
+        Bucket=SNAPSHOT_BUCKET,
+        Key=LOCAL_DIFF_BASE_KEY,
+        Body=json.dumps(base_snapshot).encode("utf-8"),
+        ContentType="application/json"
+    )
+
+    s3_client.put_object(
+        Bucket=SNAPSHOT_BUCKET,
+        Key=LOCAL_DIFF_COMPARE_KEY,
+        Body=json.dumps(compare_snapshot).encode("utf-8"),
+        ContentType="application/json"
+    )
+
+    change_table.put_item(
+        Item={
+            "deck_id": LOCAL_DIFF_DECK_ID,
+            "changed_at": LOCAL_DIFF_BASE_DATE,
+            "list_hash": LOCAL_DIFF_BASE_HASH,
+            "s3_key": LOCAL_DIFF_BASE_KEY
+        }
+    )
+
+    change_table.put_item(
+        Item={
+            "deck_id": LOCAL_DIFF_DECK_ID,
+            "changed_at": LOCAL_DIFF_COMPARE_DATE,
+            "list_hash": LOCAL_DIFF_COMPARE_HASH,
+            "s3_key": LOCAL_DIFF_COMPARE_KEY
+        }
+    )
+
+    # Force the fixture to execise S3 instead of and old cached diff.
+    existing = diff_table.query(
+        KeyConditionExpression=Key("deck_id").eq(
+            LOCAL_DIFF_DECK_ID
+        )
+    )
+
+    for item in existing.get("Items", []):
+        diff_table.delete_item(
+            Key={
+                "deck_id": LOCAL_DIFF_DECK_ID,
+                "diff_key": item["diff_key"]
+            }
+        )
+
+    print(f"Seeded diff fixture: {LOCAL_DIFF_DECK_ID}")
+
 def main() -> int:
     try:
         dynamodb = get_dynamodb()
@@ -470,6 +612,8 @@ def main() -> int:
 
         seed_snapshots(s3_client)
         seed_scryfall_fixture(s3_client)
+        
+        seed_diff_fixture(dynamodb, s3_client)
 
         print("Local CommandLog data is ready")
         return 0
