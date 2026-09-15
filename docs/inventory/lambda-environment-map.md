@@ -1,5 +1,10 @@
 # CommandLog Lambda Environment Map
 
+> Historical inventory captured before the CommandLog infrastructure migration.
+> Resources, Lambda functions, environment variables, and bucket names documented
+> here may have since been decommissioned. This file is retained as a record of
+> the pre-migration production architecture.
+
 ## log_play_event
 
 - `PLAY_EVENTS_TABLE`: `mtg_app_play_events`

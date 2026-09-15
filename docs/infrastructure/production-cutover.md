@@ -1,3 +1,11 @@
+## Status
+
+Production cutover completed successfully.
+
+The legacy production infrastructure was decommissioned after validation of the
+CommandLog frontend, API, authentication, background jobs, deck diffs, snapshot
+history, and production smoke tests.
+
 | Component | Production resource | Action |
 |---|---|---|
 | Deck state | `mtg_app_deck_state_v2` | Reuse |
