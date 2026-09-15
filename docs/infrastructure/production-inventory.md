@@ -1,413 +1,308 @@
 # CommandLog Production Infrastructure Inventory
 
-Last verified: 2026-08-17
+Last verified: 2026-09-15
+
+## Purpose
+
+This document describes the **current production infrastructure** for CommandLog after completion of the AWS infrastructure migration and legacy-resource cleanup.
+
+Historical pre-migration infrastructure details are intentionally not maintained here. See the inventory and production cutover documentation for the architecture that existed before the migration.
 
 ## Production environment
 
-- AWS region: `ca-central-1`
-- Infrastructure origin: manually created AWS resources
-- Current infrastructure is not CloudFormation/SAM-managed as a cohesive stack.
-- This inventory is read-only and exists to establish the migration boundary before introducing IaC.
+* Primary AWS region: `ca-central-1`
+* Global certificate region: `us-east-1`
+* Frontend: `https://commandlog.app`
+* API: `https://api.commandlog.app`
+* Infrastructure management: AWS SAM / CloudFormation
+* Deployment source: GitHub
+* Production deployment mechanism: GitHub Actions using AWS OIDC
+* Primary branch: `main`
 
-## Migration safety rule
+Production infrastructure is managed as a set of dedicated CommandLog CloudFormation stacks.
 
-Existing production stateful resources must not be replaced, deleted, or adopted into
-CloudFormation until their usage and migration strategy have been explicitly verified.
+## CloudFormation stacks
 
-During the initial IaC migration:
+### ca-central-1
 
-- Existing production DynamoDB tables are treated as externally managed state.
-- Existing production S3 buckets are treated as externally managed state.
-- New IaC-managed compute may reference existing stateful resources by parameter/name.
-- Destructive cleanup happens only after the new production stack has been validated.
+| Stack                      | Purpose                                                             |
+| -------------------------- | ------------------------------------------------------------------- |
+| `commandlog-prod-app`      | API Gateway, Lambda functions, permissions, and application runtime |
+| `commandlog-prod-storage`  | Production S3 storage                                               |
+| `commandlog-prod-frontend` | Production frontend S3 and CloudFront delivery                      |
+| `commandlog-prod-domain`   | Regional API custom domain and DNS                                  |
+
+### us-east-1
+
+| Stack                           | Purpose                                              |
+| ------------------------------- | ---------------------------------------------------- |
+| `commandlog-prod-domain-global` | ACM certificate used by the CloudFront custom domain |
+
+The production Cognito resources and DynamoDB application data remain stateful resources referenced by the CommandLog application.
 
 ## Lambda functions
 
-| Function | Runtime | Memory | Timeout | IAM Role |
-|---|---:|---:|---:|---|
-| log_play_event | Python 3.11 | 128 MB | 3s | mtg-app-play-events-lambda-role |
-| mtg-app-stats-version | Python 3.11 | 128 MB | 3s | mtg-app-get-stats-lambda |
-| mtg-app-scryfall-batch-loader | Python 3.11 | 1024 MB | 600s | mtg-app-scryfall-batch-loader |
-| mtg-app-stats-summary | Python 3.11 | 128 MB | 3s | mtg-app-get-stats-lambda |
-| mtg-app-sync-moxfield | Python 3.11 | 512 MB | 120s | mtg-app-lambda-role |
-| mtgAppProfile | Python 3.11 | 128 MB | 3s | mtg-app-profile-role |
-| mtg-app-get-random-decks | Python 3.11 | 128 MB | 3s | mtg-app-get-random-decks |
-| mtg-app-list-decks | Python 3.11 | 128 MB | 3s | mtg-app-deck-scan |
-| mtg-app-get-diff | Python 3.11 | 128 MB | 20s | mtg_app_get_diff |
-| mtg-app-get-games | Python 3.11 | 128 MB | 3s | mtg-app-get-games |
-| mtg-app-build-commanders-index | Python 3.11 | 3008 MB | 900s | mtg-app-commanders-index |
-| mtg-app-scryfall-batch-download | Python 3.11 | 1024 MB | 120s | scryfall-batch-download |
-| mtg-app-deck-versions | Python 3.11 | 128 MB | 3s | mtg-app-deck-versions |
+All current production application Lambdas use Python 3.11.
 
-## DynamoDB tables
+| Function                                 |
+| ---------------------------------------- |
+| `commandlog-prod-profile`                |
+| `commandlog-prod-list-decks`             |
+| `commandlog-prod-deck-versions`          |
+| `commandlog-prod-get-diff`               |
+| `commandlog-prod-get-games`              |
+| `commandlog-prod-get-random-decks`       |
+| `commandlog-prod-log-play-event`         |
+| `commandlog-prod-stats-summary`          |
+| `commandlog-prod-stats-version`          |
+| `commandlog-prod-sync-decks`             |
+| `commandlog-prod-scryfall-download`      |
+| `commandlog-prod-scryfall-load`          |
+| `commandlog-prod-build-commanders-index` |
 
-Current production tables:
-
-- `mtg_app_cards_dim`
-- `mtg_app_deck_card_events`
-- `mtg_app_deck_cards_current`
-- `mtg_app_deck_change_log`
-- `mtg_app_deck_diffs`
-- `mtg_app_deck_state`
-- `mtg_app_deck_state_v2`
-- `mtg_app_play_events`
-- `mtg_app_scryfall_print_map`
-- `mtg_app_user_profile`
-
-All tables are currently classified as **protected / ownership not yet determined**.
-
-Potential legacy tables must not be deleted until their callers and data are verified.
-
-## S3
-
-CommandLog-related buckets:
-
-| Bucket | Current assumed purpose | Classification |
-|---|---|---|
-| `ignacio-mtg-app-raw-ca-central-1` | Deck snapshots / Scryfall raw data | Protected |
-| `mtg-app-ui` | Frontend assets / generated commander index | Protected pending inspection |
+Legacy `mtg-app-*` Lambda functions have been removed.
 
 ## HTTP API
 
-- Name: `log-play-events-api`
-- Protocol: HTTP
-- Region: `ca-central-1`
-- API ID: documented separately / environment-specific
+Production API:
 
-The API name appears to predate its use as the broader CommandLog backend API.
-
-Routes, integrations and JWT authorizer configuration still need inspection.
-
-## EventBridge Scheduler
-
-| Schedule | State |
-|---|---|
-| `mtg-app-sync-daily` | ENABLED |
-| `mtg-app-scryfall-sync` | ENABLED |
-| `mtg-app-commanders-index` | ENABLED |
-
-Schedule expressions, targets, execution roles and payloads still need inspection.
-
-## Known migration concerns
-
-1. Production still runs `mtg-app-sync-moxfield`, while the migrated CommandLog ingestion path intentionally no longer supports Moxfield.
-1. The exact trigger from Scryfall bulk download to Scryfall loader must be verified.
-1. Several DynamoDB tables appear potentially legacy but their usage has not yet been proven.
-1. Existing production stateful resources must remain outside CloudFormation ownership during the initial migration.
-
-## Runtime wiring
-
-### Scheduled jobs
-
-| Schedule | Expression | Timezone | Target |
-|---|---|---|---|
-| `mtg-app-sync-daily` | `rate(30 minutes)` | America/Toronto | `mtg-app-sync-moxfield` |
-| `mtg-app-scryfall-sync` | `rate(30 days)` | America/Toronto | `mtg-app-scryfall-batch-download` |
-| `mtg-app-commanders-index` | `rate(30 days)` | America/Toronto | `mtg-app-build-commanders-index` |
-
-All schedules currently have flexible time windows disabled.
-
-Despite its name, `mtg-app-sync-daily` executes every 30 minutes.
-
-### Scryfall production pipeline
-
-Current production flow:
-
-1. `mtg-app-scryfall-sync` invokes `mtg-app-scryfall-batch-download`.
-2. Downloader writes Scryfall data to `ignacio-mtg-app-raw-ca-central-1`.
-3. S3 notification `scryfall-oracle-cards-latest-ingest` invokes
-   `mtg-app-scryfall-batch-loader`.
-4. Current notification matches:
-   - Event: `s3:ObjectCreated:Put`
-   - Prefix: `scryfall/oracle_cards`
-   - Suffix: `latest.json`
-
-This notification is incompatible with the migrated Scryfall pipeline.
-
-The migrated downloader writes `latest.jsonl.gz` using S3 CopyObject.
-The IaC-managed notification must therefore match:
-
-- Event: `s3:ObjectCreated:*`
-- Prefix: `scryfall/oracle_cards/`
-- Suffix: `latest.jsonl.gz`
-
-This change must occur during the background-events migration, not during the inventory phase.
-
-### Lambda runtime characteristics
-
-All current CommandLog Lambdas:
-
-- Runtime: Python 3.11
-- Architecture: x86_64
-- Ephemeral storage: 512 MB
-- No Lambda layers
-- No VPC attachment
-- No dead-letter queue
-- X-Ray tracing mode: PassThrough
-
-Memory and timeout differ by function and are documented in the Lambda inventory.
-
-### Automatic ingestion migration concern
-
-Production currently invokes `mtg-app-sync-moxfield` every 30 minutes.
-
-The migrated CommandLog implementation intentionally dropped Moxfield support.
-The old schedule must not be blindly reproduced in the new infrastructure.
-Its replacement/removal must be explicitly decided before production cutover.
-
-## HTTP API
-
-### API configuration
-
-- Name: `log-play-events-api`
-- Protocol: HTTP API
-- Stage: `$default`
-- Auto-deploy: enabled
-- Lambda payload format: `2.0`
-- Default execute-api endpoint: enabled
-
-The API name is historical and no longer accurately describes its role as the main CommandLog backend API.
-
-### JWT authentication
-
-All application routes use the same JWT authorizer.
-
-- Authorizer name: `MTG-app-login`
-- Identity source: `$request.header.Authorization`
-- Issuer: Cognito User Pool `ca-central-1_e6TWFI8D9`
-- Audience / app client: `m2p7rqmpkq838hhlum98r1msb`
-
-The Cognito User Pool and app client are production dependencies and must be inventoried separately.
+* Name: `commandlog-prod-api`
+* API ID: `43z1wttq6f`
+* Protocol: HTTP API
+* Custom domain: `https://api.commandlog.app`
+* Authentication: Cognito JWT
+* Frontend CORS origin: `https://commandlog.app`
 
 ### Routes
 
-| Route | Lambda |
-|---|---|
-| `GET /stats/version` | `mtg-app-stats-version` |
-| `GET /me/profile` | `mtgAppProfile` |
-| `PUT /me/profile` | `mtgAppProfile` |
-| `GET /decks` | `mtg-app-list-decks` |
-| `GET /decks/{deck_id}` | `mtg-app-deck-versions` |
-| `GET /decks/{deck_id}/diff` | `mtg-app-get-diff` |
-| `GET /games` | `mtg-app-get-games` |
-| `GET /pick` | `mtg-app-get-random-decks` |
-| `POST /play` | `log_play_event` |
-| `GET /stats/summary` | `mtg-app-stats-summary` |
+| Route                       | Purpose                                 |
+| --------------------------- | --------------------------------------- |
+| `GET /stats/version`        | Statistics and data version information |
+| `GET /me/profile`           | Retrieve user profile                   |
+| `PUT /me/profile`           | Update user profile                     |
+| `GET /decks`                | List decks                              |
+| `GET /decks/{deck_id}`      | Retrieve deck/version information       |
+| `GET /decks/{deck_id}/diff` | Compare deck versions                   |
+| `GET /games`                | Retrieve recorded games                 |
+| `GET /pick`                 | Pick random eligible decks              |
+| `POST /play`                | Record a Commander game                 |
+| `GET /stats/summary`        | Retrieve aggregate statistics           |
 
-### Orphan integration
-
-API integration `o5cigkr` targets the deleted/nonexistent Lambda `mtg-app-get-cards-name`.
-
-No current route references this integration.
-
-Classification: legacy cleanup candidate. Do not remove during inventory.
-
-### CORS
-
-API Gateway currently allows origin:
-
-`https://d2cux7a98zqlb4.cloudfront.net`
-
-Allowed methods:
-
-- GET
-- POST
-- OPTIONS
-- PUT
-- DELETE
-
-Allowed headers:
-
-- content-type
-- authorization
-
-There are currently no DELETE routes, so DELETE does not need to be carried forward unless required by a future endpoint.
-
-`mtgAppProfile` independently defines `CORS_ORIGIN` as:
-
-`https://d2cux7a98zqlb4.cloudfront.net/`
-
-The trailing slash differs from the API Gateway CORS origin. Whether the Lambda still emits independent CORS headers must be verified before the IaC migration.
-
-## Production resource dependencies
-
-### DynamoDB
-
-Confirmed active references:
-
-| Resource | Referenced by |
-|---|---|
-| `mtg_app_play_events` | play logging, game retrieval, summary/version stats, random deck |
-| `mtg_app_deck_state_v2` | play logging, deck listing, random deck, diff, ingestion |
-| `mtg_app_user_profile` | profile, random deck, ingestion |
-| `mtg_app_deck_change_log` | deck versions, diff, ingestion |
-| `mtg_app_deck_diffs` | diff |
-| `mtg_app_cards_dim` | diff, Scryfall loader |
-| `mtg_app_scryfall_print_map` | existing production diff and ingestion |
-
-Currently unreferenced by all Lambda environment configuration:
-
-- `mtg_app_deck_state`
-- `mtg_app_deck_card_events`
-- `mtg_app_deck_cards_current`
-
-These are legacy candidates, but are not approved for deletion.
-
-### S3
-
-`ignacio-mtg-app-raw-ca-central-1` is actively used for:
-
-- deck snapshots
-- Scryfall bulk data
-- Scryfall loader event source
-
-`mtg-app-ui` is actively used by the commander-index builder.
-
-`mtg-app-ui` has no S3 event notifications.
+The previous `log-play-events-api` API has been decommissioned.
 
 ## Authentication and identity
 
-### Cognito User Pool
+Production authentication uses the existing Cognito User Pool:
 
-Production authentication uses Cognito User Pool:
+* User Pool: `ca-central-1_e6TWFI8D9`
+* SPA client: `m2p7rqmpkq838hhlum98r1msb`
+* Authentication flow: OAuth authorization code
+* Scopes: `openid`, `email`, `profile`
+* Callback URL: `https://commandlog.app/`
+* Logout URL: `https://commandlog.app/`
 
-`ca-central-1_e6TWFI8D9`
+The production Cognito User Pool contains stateful user identity data and is not recreated as part of normal application deployments.
 
-Configuration:
+## DynamoDB
 
-- Email is the username attribute.
-- Email is automatically verified.
-- MFA is disabled.
-- Deletion protection is ACTIVE.
-- Cognito hosted domain is configured.
-- No custom Cognito domain is configured.
+The current CommandLog runtime continues to use production DynamoDB tables whose names predate the CommandLog rename.
 
-Classification: **PROTECTED STATEFUL PRODUCTION RESOURCE**
+| Table                     | Purpose                        |
+| ------------------------- | ------------------------------ |
+| `mtg_app_deck_state_v2`   | Current deck state             |
+| `mtg_app_user_profile`    | User configuration and profile |
+| `mtg_app_play_events`     | Recorded Commander games       |
+| `mtg_app_deck_change_log` | Historical deck changes        |
+| `mtg_app_deck_diffs`      | Cached deck diffs              |
+| `mtg_app_cards_dim`       | Card reference data            |
 
-The existing production User Pool contains user identity state and must not be recreated or replaced during the initial IaC migration.
+These tables are stateful production resources and must not be replaced or deleted by routine infrastructure deployments.
 
-The production application stack should initially reference the existing User Pool by ID/issuer.
+Renaming or redesigning the database layer to use CommandLog-native resource names is a separate future project.
 
-A separate Cognito User Pool should be created for the future development environment.
+## S3 storage
 
-### Cognito SPA client
+Current production buckets:
 
-Production SPA client:
+| Bucket                                                | Purpose                                              |
+| ----------------------------------------------------- | ---------------------------------------------------- |
+| `commandlog-prod-280535250460-ca-central-1-snapshots` | Historical deck snapshots                            |
+| `commandlog-prod-280535250460-ca-central-1-raw`       | Raw ingestion data, including Scryfall               |
+| `commandlog-prod-280535250460-ca-central-1-generated` | Generated application data such as commander indexes |
+| `commandlog-prod-280535250460-ca-central-1-web`       | Deployed frontend assets                             |
 
-`m2p7rqmpkq838hhlum98r1msb`
-
-Authentication:
-
-- OAuth authorization code flow
-- Scopes: email, openid, profile
-- Cognito identity provider
-- Refresh token authentication
-- SRP authentication
-- User existence errors suppressed
-
-Current callback URL:
-
-`https://d2cux7a98zqlb4.cloudfront.net/`
-
-Current logout URL:
-
-`https://d2cux7a98zqlb4.cloudfront.net/`
-
-The client is currently coupled to the legacy CloudFront distribution hostname.
-
-During frontend migration, the new frontend URL must be added to the Cognito
-callback/logout configuration before the old URL is removed.
+The original `ignacio-mtg-app-raw-ca-central-1` and `mtg-app-ui` buckets have been decommissioned.
 
 ## Frontend delivery
 
-Current CloudFront distribution:
+Production frontend:
 
-- Distribution ID: `EXPMYKBU51WF2`
-- Domain: `d2cux7a98zqlb4.cloudfront.net`
-- Enabled: true
-- Custom aliases: none
-- Default root object: none
-- Origin: `mtg-app-ui.s3.ca-central-1.amazonaws.com`
-- Origin path: empty
+* URL: `https://commandlog.app`
+* CloudFront distribution ID: `E2NBU7K9T63NEI`
+* CloudFront domain: `d2977zjw96ev6m.cloudfront.net`
+* Web bucket: `commandlog-prod-280535250460-ca-central-1-web`
+* Generated-data bucket: `commandlog-prod-280535250460-ca-central-1-generated`
 
-There are no API Gateway custom domains.
+CloudFront serves the application frontend from the production web bucket.
 
-Classification:
+Generated application assets under `/data/*`, including the commander index, are served from the production generated-data bucket.
 
-- Current CloudFront distribution: **REPLACEABLE COMPUTE/DELIVERY INFRASTRUCTURE**
-- `mtg-app-ui` bucket: **PROTECTED pending content/security inspection**
+The frontend communicates with the backend through:
 
-Target architecture is not to preserve this CloudFront configuration verbatim.
-It will eventually be replaced by an IaC-managed frontend delivery stack using private S3 + CloudFront OAC, with separate ownership for deployed frontend assets and runtime-generated data.
+`https://api.commandlog.app`
 
-### Current frontend security and delivery
+The previous CloudFront distribution `EXPMYKBU51WF2` / `d2cux7a98zqlb4.cloudfront.net` has been removed.
 
-The current CloudFront distribution uses the S3 REST endpoint with Origin Access Control (OAC).
+## Background automation
 
-Positive existing configuration:
+### EventBridge Scheduler
 
-- S3 Origin Access Control is enabled.
-- S3 Block Public Access has all four controls enabled.
-- HTTP requests are redirected to HTTPS.
-- CloudFront compression is enabled.
-- S3 bucket versioning is enabled.
-- S3 objects use SSE-S3 (`AES256`) server-side encryption.
-- Default root object is `index.html`.
+Current production schedules:
 
-The initial inventory incorrectly reported no default root object. The detailed CloudFront distribution configuration confirms `index.html`.
+| Schedule                           | Target                                   |
+| ---------------------------------- | ---------------------------------------- |
+| `commandlog-prod-scryfall-sync`    | `commandlog-prod-scryfall-download`      |
+| `commandlog-prod-commanders-index` | `commandlog-prod-build-commanders-index` |
 
-### Configuration not to reproduce verbatim
+The legacy Moxfield synchronization schedule has been removed.
 
-The S3 bucket also has static website hosting enabled even though CloudFront uses the S3 REST endpoint through OAC. The website endpoint is therefore not required by the current delivery path and should not be enabled in the target architecture.
+CommandLog does not currently run periodic Moxfield synchronization.
 
-The CloudFront distribution currently uses `PriceClass_All`. A narrower price class should be evaluated for the target architecture because CommandLog is currently a low-traffic personal application.
+### EventBridge rule
 
-The distribution currently uses the CloudFront default certificate and reports the `TLSv1` minimum protocol policy. The target custom-domain configuration should use ACM, SNI, and a modern TLS security policy.
+Production includes:
 
-### Outstanding security finding
+`commandlog-prod-scryfall-latest-created`
 
-`mtg-app-ui` has all S3 Public Access Block controls enabled, but
-`get-bucket-policy-status` reports `IsPublic: true`.
+This rule participates in the Scryfall ingestion pipeline after new raw bulk data is stored.
 
-The underlying bucket policy must be inspected. The target architecture should use an explicitly private bucket policy granting access only to the appropriate CloudFront distribution/OAC.
+## Scryfall ingestion
 
-### AWS WAF
+The current Scryfall pipeline uses the Oracle Cards JSONL bulk-data format.
 
-CloudFront currently has a WAFv2 Web ACL attached:
+The downloader supports:
 
-`CreatedByCloudFront-adc44157`
+* `jsonl_download_uri`
+* gzip-compressed JSONL
+* `.jsonl.gz` objects
 
-The Web ACL was not identified in the initial infrastructure inventory.
+Current flow:
 
-Its rules, purpose and cost justification must be inspected before deciding whether WAF belongs in the target architecture.
+1. `commandlog-prod-scryfall-sync` invokes `commandlog-prod-scryfall-download`.
+2. The downloader retrieves the Scryfall Oracle Cards JSONL gzip bulk file.
+3. Raw data is stored in the production raw-data bucket.
+4. The ingestion event invokes `commandlog-prod-scryfall-load`.
+5. Card reference data is updated for application use.
+6. The commander-index process generates frontend lookup data in the generated-data bucket.
 
-## Inventory conclusion
+The application no longer depends on the older JSON-array Scryfall bulk format.
 
-The production boundary is sufficiently understood to begin the IaC migration.
+## Deck ingestion
 
-Protected existing state:
+Current deck ingestion is Archidekt-based.
 
-- Production Cognito User Pool
-- Production DynamoDB tables currently used by the application
-- `ignacio-mtg-app-raw-ca-central-1`
-- `mtg-app-ui` until frontend migration is complete
+Moxfield ingestion was intentionally not carried forward into the migrated production application.
 
-Recreatable infrastructure:
+The current architecture still contains `commandlog-prod-sync-decks`, but the old periodic Moxfield synchronization process has been removed.
 
-- Lambda functions
-- HTTP API
-- JWT authorizer configuration
-- EventBridge schedules
-- Lambda/API permissions
-- CloudFront frontend delivery
+A future redesign will make CommandLog decks independent first-class objects with explicit imports, safe re-importing, provider-independent text import, and in-application editing.
 
-Known migration changes:
+## Production deployment
 
-- Moxfield ingestion will not be carried forward.
-- Scryfall ingestion must use `latest.jsonl.gz` and support the S3 CopyObject event.
-- Frontend hosting will be redesigned as private S3 + CloudFront OAC rather than reproducing the existing distribution verbatim.
-- The orphan `mtg-app-get-cards-name` API integration will not be recreated.
-- Suspected legacy DynamoDB tables will be investigated only before any cleanup.
+Production deployments run from `main` through the production GitHub Actions workflow.
 
-Further production configuration will be inspected just-in-time when required by
-the resource being migrated.
+The deployment process:
+
+1. Builds and validates the application.
+2. Deploys the production application stack.
+3. Publishes `frontend/index.html` to the production web bucket.
+4. Invalidates the CloudFront frontend cache.
+5. Runs production smoke tests.
+
+Production frontend CORS is configured for:
+
+`https://commandlog.app`
+
+Production application configuration keeps automatic profile-save ingestion disabled:
+
+`InvokeIngestOnSave=false`
+
+## Production validation
+
+The production smoke test verifies at minimum:
+
+* `https://commandlog.app` is reachable.
+* `https://api.commandlog.app` is reachable.
+* Unauthenticated protected API requests return `401`.
+* CORS allows `https://commandlog.app`.
+* Production background automation is enabled.
+* Profile-save ingestion remains disabled.
+
+The production smoke test was run successfully throughout the legacy infrastructure cleanup.
+
+## Legacy infrastructure decommissioning
+
+The original MTG application infrastructure was removed after the CommandLog replacement had been validated.
+
+Decommissioned resources included:
+
+* Legacy `mtg-app-*` Lambda functions
+* `log_play_event`
+* `mtgAppProfile`
+* Legacy `log-play-events-api`
+* Legacy EventBridge Scheduler jobs
+* Legacy CloudFront distribution
+* `mtg-app-ui`
+* Legacy Lambda and Scheduler IAM roles
+* Orphaned legacy IAM policies
+* `ignacio-mtg-app-raw-ca-central-1`
+
+### Snapshot migration validation
+
+Before deleting the legacy raw bucket, every deck-change snapshot referenced by production change history was verified against the CommandLog production snapshot bucket.
+
+Final migration audit:
+
+```text
+copied=0
+already_exists=99
+skipped=12
+missing_source=0
+repaired=0
+unresolved=0
+```
+
+The legacy raw bucket was deleted only after:
+
+* the migration audit reported no missing source objects,
+* no active Lambda referenced it,
+* its stale legacy S3 event notification was removed,
+* and the production smoke test passed.
+
+## Current ownership boundary
+
+### IaC-managed
+
+* Production Lambda functions
+* HTTP API
+* API custom domain
+* API and Lambda permissions
+* EventBridge schedules and rules
+* Production S3 infrastructure
+* Frontend S3 and CloudFront delivery
+* Production custom-domain infrastructure
+
+### Existing stateful resources
+
+* Production Cognito User Pool and SPA client
+* Production DynamoDB application tables
+
+These stateful resources should continue to be treated conservatively until explicitly migrated or redesigned.
+
+## Current status
+
+The CommandLog production infrastructure migration is complete.
+
+The application now runs on the IaC-managed CommandLog production infrastructure, uses the `commandlog.app` custom domains, and no longer depends on the legacy MTG application compute, delivery, scheduling, IAM, or raw-storage infrastructure.
+
+Future infrastructure work should treat this document as the baseline production inventory rather than the pre-migration architecture.
