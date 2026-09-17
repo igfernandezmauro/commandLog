@@ -518,6 +518,13 @@
       </div>
     </details>
 
+    <div class="row" style="align-items:center; gap:8px; margin-bottom:12px;">
+      <button id="importRefreshBtn" type="button">
+        Import from Archidekt
+      </button>
+      <span id="importRefreshStatus" class="hint"></span>
+    </div>
+
     <label for="deck">Deck</label>
     <div id="deckInfo" style="margin-bottom:12px;"></div>
     <select id="deck"></select>
@@ -768,6 +775,8 @@ The Ur-Dragon"></textarea>
       let archidektEditMode = false;
       let archidektOriginalValue = "";
 
+      const elImportRefreshBtn = document.getElementById("importRefreshBtn");
+      const elImportRefreshStatus = document.getElementById("importRefreshStatus");
       const elDeck = document.getElementById("deck");
       const elResult = document.getElementById("result");
       const elNotes = document.getElementById("notes");
@@ -2174,17 +2183,41 @@ The Ur-Dragon"></textarea>
 
         // populate dropdown (your existing logic)
         elDeck.innerHTML = "";
-        const lastDeckId = localStorage.getItem("last_deck_id");
+        
 
         for (const d of decks) {
           const opt = document.createElement("option");
           opt.value = d.deck_id;
+
           const commander = d.commander ? ` | ${d.commander}` : "";
+
           opt.textContent = `${d.name || d.deck_id}${commander}`;
+
           elDeck.appendChild(opt);
         }
 
-        if (lastDeckId) elDeck.value = lastDeckId;
+        updateImportRefreshUi();
+
+        if (decks.length === 0) {
+          elDeck.disabled = true;
+
+          setStatus("You don't have any decks yet. Import your public Archidekt decks to get started.", true);
+
+          elImportRefreshStatus.textContent = "Import your decks to start tracking changes and games.";
+
+          return;
+        }
+
+        elDeck.disabled = false;
+
+        const lastDeckId = localStorage.getItem("last_deck_id");
+
+        if(
+          lastDeckId &&
+          decks.some(d => String(d.deck_id) === String(lastDeckId))
+        ) {
+          elDeck.value = lastDeckId;
+        }
 
         renderSelectedDeckInfo();
 
@@ -2194,6 +2227,80 @@ The Ur-Dragon"></textarea>
         loadPerDeckStats().catch(() => {});
       }
 
+      function updateImportRefreshUi() {
+        const hasDecks = Array.isArray(DECKS) && DECKS.length > 0;
+
+        elImportRefreshBtn.textContent = hasDecks ? "Refresh All" : "Import from Archidekt";
+      }
+
+      function formatImportResult(result) {
+        const created = Number(result.created || 0);
+        const updated = Number(result.updated || 0);
+        const unchanged = Number(result.unchanged || 0);
+
+        const parts = []
+
+        if (created) {
+          parts.push(`${created} imported`);
+        }
+
+        if (updated) {
+          parts.push(`${updated} updated`);
+        }
+
+        if (unchanged) {
+          parts.push(`${unchanged} unchanged`);
+        }
+
+        return parts.length ? parts.join(" • ") : "No decks found."
+      }
+
+      async function importRefreshArchidekt() {
+        const hadDecks = Array.isArray(DECKS) && DECKS.length > 0;
+
+        elImportRefreshBtn.disabled = true;
+        elImportRefreshStatus.textContent = hadDecks ? "Checking Archidekt..." : "Importing from Archidekt";
+
+        try {
+          const res = await apiFetch(
+            `${API_BASE_URL}/imports/archidekt`,
+            {
+              method: "POST"
+            }
+          );
+
+          const txt = await res.text();
+
+          let data = {};
+
+          try {
+            data = txt ? JSON.parse(txt) : {};
+          } catch {
+            data = {};
+          }
+
+          if (!res.ok) {
+            const message =
+              data.message ||
+              data.error?.message ||
+              txt ||
+              `Import failed (${res.status})`;
+
+            throw new Error(message);
+          }
+
+          const result = data.import || {};
+
+          elImportRefreshStatus.textContent = formatImportResult(result);
+
+          await loadDecks();
+        } catch (err) {
+          elImportRefreshStatus.textContent = err?.message || "Import failed.";
+        } finally {
+          elImportRefreshBtn.disabled = false;
+          updateImportRefreshUi();
+        }
+      }
 
       async function submitPlay() {
         const deck_id = elDeck.value;
@@ -2498,6 +2605,10 @@ The Ur-Dragon"></textarea>
         const msg = `JS Error: ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`
         console.log(e);
         try { setStatus(msg, false); } catch (_) {}
+      });
+
+      elImportRefreshBtn.addEventListener("click", () => {
+        importRefreshArchidekt();
       });
 
       window.cognitoLogin = login;

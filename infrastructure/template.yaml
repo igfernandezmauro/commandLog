@@ -446,18 +446,26 @@ Resources:
               - dynamodb:PutItem
             Resource:
               - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckChangeLogTableName}
-          - Sid: QueryEnabledProfiles
+          - Sid: ReadUserProfile
             Effect: Allow
             Action:
-              - dynamodb:Query
+              - dynamodb:GetItem
             Resource:
-              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}/index/gsi_ingestion_enabled
+              - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UserProfileTableName}
           - Sid: WriteDeckSnapshots
             Effect: Allow
             Action:
               - s3:PutObject
             Resource:
               - !Sub arn:${AWS::Partition}:s3:::${SnapshotBucketName}/*
+      Events:
+        ImportArchidekt:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CommandLogHttpApi
+            Path: /imports/archidekt
+            Method: POST
+            PayloadFormatVersion: "2.0"
 
   ProfileFunction:
     Type: AWS::Serverless::Function

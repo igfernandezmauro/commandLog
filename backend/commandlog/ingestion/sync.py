@@ -10,7 +10,6 @@ from commandlog.ingestion.repository import (
     update_deck_state
 )
 from commandlog.integrations import archidekt
-from commandlog.users.repository import list_enabled_profiles
 
 
 logger = get_logger(__name__)
@@ -56,21 +55,84 @@ def build_snapshot_key(username: str, deck_id: str, run_timestamp: str) -> str:
 
     return f"archidekt/user/{username}/decks/{deck_id}/snapshot_ts={key_timestamp}.json"
 
+def sync_archidekt_deck(user_key: str, username: str, deck_id: str, *, run_timestamp: str | None = None, dry_run: bool = False):
+    deck_json = archidekt.fetch_deck(deck_id)
+
+    normalized = archidekt.normalize_deck(deck_json)
+
+    list_hash = normalized["hash"]
+    main = normalized["main"]
+
+    previous = get_current_deck(user_key, deck_id)
+
+    raw_key = previous.get("raw_s3_key") if previous else None
+    previous_hash = previous.get("list_hash") if previous else None
+    previous_main = previous.get("main") if previous else None
+    metadata = archidekt.get_metadata(deck_json)
+
+    if not previous:
+        status = "CREATED"
+    elif previous_hash != list_hash:
+        status = "UPDATED"
+    else:
+        status = "UNCHANGED"
+
+    if status != "UNCHANGED":
+        snapshot_key = build_snapshot_key(username, deck_id, run_timestamp)
+
+        diff = compute_diff(previous_main, main) if isinstance(previous_main, dict) else None
+
+        if not dry_run:
+            save_snapshot(snapshot_key, deck_json)
+            raw_key = snapshot_key
+
+            save_change(
+                {
+                    "deck_id": deck_id,
+                    "changed_at": run_timestamp,
+                    "source": "archidekt",
+                    "change_type": status,
+                    "deck_updated_at": metadata.get("changed_at"),
+                    "list_hash": list_hash,
+                    "diff_summary": diff or {"note": "no previous state"},
+                    "s3_key": snapshot_key
+                }
+            )
+
+    if not dry_run:
+        update_deck_state(
+            user_key=user_key,
+            deck_id=deck_id,
+            source="archidekt",
+            name=metadata.get("name"),
+            commander=archidekt.get_commander(deck_json),
+            featured=metadata.get("featured"),
+            changed_at=metadata.get("changed_at"),
+            created_at=metadata.get("created_at"),
+            run_ts=run_timestamp,
+            list_hash=list_hash,
+            main=main,
+            raw_key=raw_key
+        )
+
+    return {
+        "deck_id": deck_id,
+        "name": metadata.get("name"),
+        "status": status
+    }
+
 def sync_archidekt_user(user_key: str, username: str, *, dry_run: bool = False) -> dict[str, Any]:
     run_timestamp = now_iso()
-
     decks = archidekt.list_decks(username)
 
-    processed = 0
-    changed = 0
-    unchanged = 0
+    results = []
 
     for deck_summary in decks:
         deck_id = archidekt.get_deck_id(deck_summary)
 
         if not deck_id:
             logger.warning(
-                "Skipping Archidekt deck without and ID",
+                "Skipping Archidekt deck without an ID",
                 extra={
                     "data": {
                         "user_key": user_key,
@@ -80,116 +142,17 @@ def sync_archidekt_user(user_key: str, username: str, *, dry_run: bool = False) 
             )
             continue
 
-        deck_json = archidekt.fetch_deck(deck_id)
-
-        normalized = archidekt.normalize_deck(deck_json)
-
-        list_hash = normalized["hash"]
-        main = normalized["main"]
-
-        snapshot_key = build_snapshot_key(username, deck_id, run_timestamp)
-
-        previous = get_current_deck(user_key, deck_id)
-
-        raw_key = previous.get("raw_s3_key") if previous else None
-
-        previous_hash = previous.get("list_hash") if previous else None
-
-        previous_main = previous.get("main") if previous else None
-
-        diff = None
-
-        if isinstance(previous_main, dict):
-            diff = compute_diff(previous_main, main)
-
-        deck_changed = previous_hash != list_hash
-
-        if deck_changed:
-            changed += 1
-
-            if not dry_run:
-                save_snapshot(snapshot_key, deck_json)
-                raw_key = snapshot_key
-
-                metadata = archidekt.get_metadata(deck_json)
-
-                save_change(
-                    {
-                        "deck_id": deck_id,
-                        "changed_at": run_timestamp,
-                        "source": "archidekt",
-                        "change_type": "CREATED" if not previous else "UPDATED",
-                        "deck_updated_at": metadata.get("changed_at"),
-                        "list_hash": list_hash,
-                        "diff_summary": diff or {"note": "no previous state"},
-                        "s3_key": snapshot_key
-                    }
-                )
-
-        else:
-            unchanged += 1
-
-        if not dry_run:
-            metadata = archidekt.get_metadata(deck_json)
-
-            update_deck_state(
-                user_key=user_key,
-                deck_id=deck_id,
-                source="archidekt",
-                name=metadata.get("name"),
-                commander=archidekt.get_commander(deck_json),
-                featured=metadata.get("featured"),
-                changed_at=metadata.get("changed_at"),
-                created_at=metadata.get("created_at"),
-                run_ts=run_timestamp,
-                list_hash=list_hash,
-                main=main,
-                raw_key=raw_key
-            )
-
-        processed += 1
+        results.append(sync_archidekt_deck(user_key, username, deck_id, run_timestamp=run_timestamp, dry_run=dry_run))
 
         time.sleep(0.05)
 
-    result = {
-        "user_key": user_key,
-        "source": "archidekt",
-        "username": username,
-        "processed": processed,
-        "changed": changed,
-        "unchanged": unchanged,
-        "run_ts": run_timestamp,
-        "dry_run": dry_run
-    }
-
-    logger.info(
-        "Archidekt ingestion completed",
-        extra = {
-            "data": {
-                "user_key": user_key,
-                "processed": processed,
-                "changed": changed,
-                "unchanged": unchanged,
-                "dry_run": dry_run
-            }
-        }
-    )
-
-    return result
-
-def sync_enabled_profiles(*, dry_run: bool = False) -> dict[str, Any]:
-    profiles = list_enabled_profiles()
-
-    results = []
-
-    for profile in profiles:
-        if profile.get("ingestion_source") != "archidekt":
-            continue
-
-        results.append(sync_archidekt_user(profile["user_key"], profile["username"], dry_run=dry_run))
-
     return {
-        "profiles_processed": len(results),
-        "results": results,
+        "source": "archidekt",
+        "processed": len(results),
+        "created": sum(r["status"] == "CREATED" for r in results),
+        "updated": sum(r["status"] == "UPDATED" for r in results),
+        "unchanged": sum(r["status"] == "UNCHANGED" for r in results),
+        "decks": results,
+        "run_ts": run_timestamp,
         "dry_run": dry_run
     }
