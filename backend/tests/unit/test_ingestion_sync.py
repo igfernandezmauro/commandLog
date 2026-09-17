@@ -144,11 +144,29 @@ def test_second_identical_sync_is_unchanged_and_keeps_existing_snapshot(monkeypa
         "test-user"
     )
 
-    assert first["changed"] == 1
+    assert first["processed"] == 1
+    assert first["created"] == 1
+    assert first["updated"] == 0
     assert first["unchanged"] == 0
+    assert first["decks"] == [
+        {
+            "deck_id": "deck-a",
+            "name": "Deck A",
+            "status": "CREATED"
+        }
+    ]
 
-    assert second["changed"] == 0
+    assert second["processed"] == 1
+    assert second["created"] == 0
+    assert second["updated"] == 0
     assert second["unchanged"] == 1
+    assert second["decks"] == [
+        {
+            "deck_id": "deck-a",
+            "name": "Deck A",
+            "status": "UNCHANGED"
+        }
+    ]
 
     # Only the first sync should create history/snapshot records.
     assert len(snapshots) == 1
@@ -239,8 +257,16 @@ def test_changed_deck_updates_same_identity_and_records_new_hash(monkeypatch):
     )
 
     assert result["processed"] == 1
-    assert result["changed"] == 1
+    assert result["created"] == 0
+    assert result["updated"] == 1
     assert result["unchanged"] == 0
+    assert result["decks"] == [
+        {
+            "deck_id": "deck-a",
+            "name": "Deck A",
+            "status": "UPDATED"
+        }
+    ]
 
     # Reimport/update retains the same external deck identity
     assert updates[0]["deck_id"] == "deck-a"
@@ -257,4 +283,74 @@ def test_changed_deck_updates_same_identity_and_records_new_hash(monkeypatch):
         "added": [("card-b", 1)],
         "removed": [],
         "changed": []
+    }
+
+def test_sync_archidekt_deck_returns_created_for_new_deck(monkeypatch):
+    monkeypatch.setattr(
+        sync.archidekt,
+        "fetch_deck",
+        lambda deck_id: {"id": deck_id}
+    )
+
+    monkeypatch.setattr(
+        sync.archidekt,
+        "normalize_deck",
+        lambda deck: {
+            "hash": "hash-v1",
+            "main": {"card-a": 1}
+        }
+    )
+
+    monkeypatch.setattr(
+        sync.archidekt,
+        "get_metadata",
+        lambda deck: {
+            "name": "Deck A",
+            "featured": None,
+            "changed_at": "2026-01-01T00:00:00Z",
+            "created_at": "2026-01-01T00:00:00Z"
+        }
+    )
+
+    monkeypatch.setattr(
+        sync.archidekt,
+        "get_commander",
+        lambda deck: "Commander A"
+    )
+
+    monkeypatch.setattr(
+        sync,
+        "get_current_deck",
+        lambda user_key, deck_id: None
+    )
+
+    monkeypatch.setattr(
+        sync,
+        "save_snapshot",
+        lambda *args: None
+    )
+
+    monkeypatch.setattr(
+        sync,
+        "save_change",
+        lambda *args: None
+    )
+
+    monkeypatch.setattr(
+        sync,
+        "update_deck_state",
+        lambda **kwargs: None
+    )
+
+    result = sync.sync_archidekt_deck(
+        "user#test",
+        "test-user",
+        "deck-a",
+        run_timestamp="2026-01-01T10:00:00Z"
+    )
+
+    assert result == {
+        "deck_id": "deck-a",
+        "name": "Deck A",
+        "status": "CREATED"
     }
