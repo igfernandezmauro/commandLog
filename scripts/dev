@@ -186,6 +186,7 @@ GET /me/profile|JWT
 GET /pick|JWT
 GET /stats/summary|JWT
 GET /stats/version|JWT
+POST /imports/archidekt|JWT
 POST /play|JWT
 PUT /me/profile|JWT
 EOF
