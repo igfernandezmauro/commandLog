@@ -438,6 +438,7 @@ Resources:
             Action:
               - dynamodb:GetItem
               - dynamodb:UpdateItem
+              - dynamodb:Query
             Resource:
               - !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DeckStateTableName}
           - Sid: WriteDeckHistory
