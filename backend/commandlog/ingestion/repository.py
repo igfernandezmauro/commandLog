@@ -38,6 +38,7 @@ def update_deck_state(
     user_key: str,
     deck_id: str,
     source: str,
+    external_id: str | None,
     name: str | None,
     commander: str,
     featured: str | None,
@@ -55,6 +56,7 @@ def update_deck_state(
         },
         UpdateExpression="""
             SET #source = :source,
+                external_id = :external_id,
                 #name = :name,
                 commander = :commander,
                 featured = :featured,
@@ -72,6 +74,7 @@ def update_deck_state(
         },
         ExpressionAttributeValues={
             ":source": source,
+            ":external_id": external_id,
             ":name": name,
             ":commander": commander,
             ":featured": featured,

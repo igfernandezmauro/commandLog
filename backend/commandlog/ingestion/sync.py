@@ -10,6 +10,8 @@ from commandlog.ingestion.repository import (
     update_deck_state
 )
 from commandlog.integrations import archidekt
+from commandlog.decks.identity import new_deck_id
+from commandlog.decks.repository import find_user_deck_by_external_id
 
 
 logger = get_logger(__name__)
@@ -50,14 +52,23 @@ def compute_diff(old_main: dict[str, int], new_main: dict[str, int]) -> dict[str
         "changed": changed
     }
 
-def build_snapshot_key(username: str, deck_id: str, run_timestamp: str) -> str:
+def build_snapshot_key(username: str, external_id: str, run_timestamp: str) -> str:
     key_timestamp = run_timestamp.replace(":", "").replace("-", "")
 
-    return f"archidekt/user/{username}/decks/{deck_id}/snapshot_ts={key_timestamp}.json"
+    return f"archidekt/user/{username}/decks/{external_id}/snapshot_ts={key_timestamp}.json"
 
-def sync_archidekt_deck(user_key: str, username: str, deck_id: str, *, run_timestamp: str | None = None, dry_run: bool = False):
-    deck_json = archidekt.fetch_deck(deck_id)
+def sync_archidekt_deck(user_key: str, username: str, external_id: str, *, run_timestamp: str | None = None, dry_run: bool = False):
+    external_id = str(external_id).strip()
+    run_timestamp = run_timestamp or now_iso()
 
+    matched_deck = find_user_deck_by_external_id(user_key, source="archidekt", external_id=external_id)
+
+    if matched_deck:
+        deck_id = str(matched_deck["deck_id"])
+    else:
+        deck_id = new_deck_id()
+
+    deck_json = archidekt.fetch_deck(external_id)
     normalized = archidekt.normalize_deck(deck_json)
 
     list_hash = normalized["hash"]
@@ -78,7 +89,7 @@ def sync_archidekt_deck(user_key: str, username: str, deck_id: str, *, run_times
         status = "UNCHANGED"
 
     if status != "UNCHANGED":
-        snapshot_key = build_snapshot_key(username, deck_id, run_timestamp)
+        snapshot_key = build_snapshot_key(username, external_id, run_timestamp)
 
         diff = compute_diff(previous_main, main) if isinstance(previous_main, dict) else None
 
@@ -104,6 +115,7 @@ def sync_archidekt_deck(user_key: str, username: str, deck_id: str, *, run_times
             user_key=user_key,
             deck_id=deck_id,
             source="archidekt",
+            external_id=external_id,
             name=metadata.get("name"),
             commander=archidekt.get_commander(deck_json),
             featured=metadata.get("featured"),
@@ -117,6 +129,7 @@ def sync_archidekt_deck(user_key: str, username: str, deck_id: str, *, run_times
 
     return {
         "deck_id": deck_id,
+        "external_id": external_id,
         "name": metadata.get("name"),
         "status": status
     }
@@ -128,9 +141,9 @@ def sync_archidekt_user(user_key: str, username: str, *, dry_run: bool = False) 
     results = []
 
     for deck_summary in decks:
-        deck_id = archidekt.get_deck_id(deck_summary)
+        external_id = archidekt.get_deck_id(deck_summary)
 
-        if not deck_id:
+        if not external_id:
             logger.warning(
                 "Skipping Archidekt deck without an ID",
                 extra={
@@ -142,7 +155,7 @@ def sync_archidekt_user(user_key: str, username: str, *, dry_run: bool = False) 
             )
             continue
 
-        results.append(sync_archidekt_deck(user_key, username, deck_id, run_timestamp=run_timestamp, dry_run=dry_run))
+        results.append(sync_archidekt_deck(user_key, username, external_id, run_timestamp=run_timestamp, dry_run=dry_run))
 
         time.sleep(0.05)
 
