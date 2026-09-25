@@ -808,7 +808,7 @@ The Ur-Dragon"></textarea>
     </div>
 
     <div class="modal-footer">
-      <button id="profileSaveBtn" class="btn-primary" type="button">Save</button>
+      <button id="profileSaveBtn" class="btn-primary" type="button">Close</button>
     </div>
   </div> 
 
@@ -1765,44 +1765,6 @@ The Ur-Dragon"></textarea>
         }
 
         return null
-      }
-
-      async function saveProfileFromModal() {
-        const archidekt_username = document.getElementById("archidektUsernameInput").value.trim();
-
-        setProfileStatus("Saving...", true);
-
-        const r = await apiFetch(`${API_BASE_URL}/me/profile`, {
-          method: "PUT",
-          body: JSON.stringify({ archidekt_username, ingestion_enabled, source: "archidekt" }),
-          headers: { "Content-Type": "application/json" },
-        });
-
-        const data = await r.json().catch(async () => ({ raw: await r.text() }));
-        if (!r.ok) {
-          setProfileStatus(`Failed to save: ${r.status} ${JSON.stringify(data)}`, false);
-          return;
-        }
-
-        setProfileStatus("Saved.", true);
-
-        const started = !!(data.ingest && data.ingest.started);
-
-        if(started) {
-          setProfileStatus("Syncing decks...", true);
-
-          const decks = await waitForDecksToAppear({ maxMs: 30000, intervalMs: 2000 });
-
-          if (decks) {
-            setProfileStatus("Decks synced.", true);
-
-            await loadDecks();
-            closeProfileModal();
-          } else {
-            setProfileStatus("Sync started. Decks may take a bit longer, try again soon.", true);
-            await loadDecks().catch(() => {});
-          }
-        }
       }
 
       function buildAllVersions(changeLogRows) {
@@ -2886,18 +2848,7 @@ The Ur-Dragon"></textarea>
 
       elDiffClose.addEventListener("click", closeDiffModal);
       elDiffOk.addEventListener("click", closeDiffModal);
-      elDiffModal.addEventListener("click", (e) => {
-        if (e.target === elDiffModal) closeDiffModal();
-      });
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && elDiffModal.classList.contains("open")) {
-          closeDiffModal();
-          closeImg();
-        }
-        if (e.key === "Escape" && elAddDeckModal.classList.contains("open")) {
-          closeAddDeckModal();
-        }
-      });
+
       elDiffRefresh.addEventListener("click", () => {
         if (!ACTIVE_DIFF_DECK_ID) return;
         showDeckDiff(ACTIVE_DIFF_DECK_ID, "updated");
@@ -2923,12 +2874,6 @@ The Ur-Dragon"></textarea>
       elAddDeckBtn.addEventListener("click", openAddDeckModal);
       elAddDeckCloseBtn.addEventListener("click", closeAddDeckModal);
       elAddDeckCancelBtn.addEventListener("click", closeAddDeckModal);
-
-      elAddDeckModal.addEventListener("click", (e) => {
-        if (e.target === elAddDeckModal) {
-          closeAddDeckModal();
-        }
-      });
 
       elAddDeckSubmitBtn.addEventListener("click", async () => {
         submitAddDeck();
@@ -2977,8 +2922,7 @@ The Ur-Dragon"></textarea>
       });
 
       document.getElementById("profileCloseBtn").addEventListener("click", closeProfileModal);
-      document.getElementById("profileModalBackdrop").addEventListener("click", closeProfileModal);
-      document.getElementById("profileSaveBtn").addEventListener("click", saveProfileFromModal);
+      document.getElementById("profileSaveBtn").addEventListener("click", closeProfileModal);
 
       elImgClose.addEventListener("click", closeImg);
       elImgOverlay.addEventListener("click", (e) => {
