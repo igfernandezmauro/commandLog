@@ -18,3 +18,5 @@ local/.env.local
 .venv/
 
 .aws-sam/
+
+frontend/data/commanders_index.json

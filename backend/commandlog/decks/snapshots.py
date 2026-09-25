@@ -153,6 +153,12 @@ def normalize_moxfield_snapshot(items: list[dict[str, Any]]) -> dict[str, dict[s
     return normalized
 
 def normalize_snapshot(snapshot: dict[str, Any] | list[Any], source: str) -> dict[str, dict[str, Any]]:
+    if source == "text":
+        if not isinstance(snapshot, dict):
+            return {}
+
+        return normalize_text_snapshot(snapshot)
+
     items = snapshot_items(snapshot, source)
 
     if source == "moxfield":
@@ -162,3 +168,27 @@ def normalize_snapshot(snapshot: dict[str, Any] | list[Any], source: str) -> dic
         return normalize_archidekt_snapshot(items)
 
     raise ValueError(f"Unsupported source: {source}")
+
+def normalize_text_snapshot(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    cards = snapshot.get("cards") or {}
+
+    if not isinstance(cards, dict):
+        return {}
+
+    normalized: dict[str, dict[str, Any]] = {}
+
+    for card_id, card in cards.items():
+        if not isinstance(card, dict):
+            continue
+
+        quantity = int(card.get("quantity") or card.get("qty") or 0)
+
+        if quantity <= 0:
+            continue
+
+        normalized[str(card_id)] = {
+            "name": card.get("name") or "Unknown Card",
+            "qty": quantity
+        }
+
+    return normalized
