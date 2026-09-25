@@ -19,10 +19,35 @@ PRINTING_SUFFIX = re.compile(
     r"\s+\([A-Za-z0-9]{2,8}\)\s+\S+\s*$"
 )
 
+FOIL_SUFFIX = re.compile(
+    r"\s+\*(?:F|E)\*\s*$",
+    re.IGNORECASE
+)
+
+SINGLE_SLASH_SEPARATOR = re.compile(r"\s+/\s+")
+
+# def clean_card_name(value: str) -> str:
+#     name = value.strip()
+#     name = PRINTING_SUFFIX.sub("", name)
+#     return name.strip()
+
 def clean_card_name(value: str) -> str:
     name = value.strip()
-    name = PRINTING_SUFFIX.sub("", name)
-    return name.strip()
+
+    while True:
+        previous = name
+        name = FOIL_SUFFIX.sub("", name).strip()
+        name = PRINTING_SUFFIX.sub("", name).strip()
+
+        if name == previous:
+            break
+
+    parts = SINGLE_SLASH_SEPARATOR.split(name, maxsplit=1)
+
+    if len(parts) == 2:
+        name = parts[0].strip()
+
+    return name
 
 def parse_decklist(text: str) -> list[dict[str, Any]]:
     if not isinstance(text, str) or not text.strip():

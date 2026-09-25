@@ -352,3 +352,47 @@ def test_resolves_card_aliases_to_same_oracle_card(monkeypatch):
     assert build_main(resolved) == {
         "oracle:aang-oracle-id": 2
     }
+
+@pytest.mark.parametrize(
+    "decklist",
+    [
+        "1 Sol Ring *F*",
+        "1 Sol Ring *E*",
+        "1 Sol Ring (CMM) 396 *F*",
+        "1 Sol Ring *F* (CMM) 396",
+    ],
+)
+def test_strips_foil_markers(decklist):
+    assert parse_decklist(decklist) == [
+        {
+            "name": "Sol Ring",
+            "quantity": 1,
+        }
+    ]
+
+def test_normalizes_single_slash_multiface_name():
+    result = parse_decklist(
+        "1 Bottomless Pool / Locker Room"
+    )
+
+    assert result == [
+        {
+            "name": "Bottomless Pool",
+            "quantity": 1,
+        }
+    ]
+
+def test_combines_front_face_and_single_slash_name():
+    result = parse_decklist(
+        """
+        1 Bottomless Pool
+        1 Bottomless Pool / Locker Room
+        """
+    )
+
+    assert result == [
+        {
+            "name": "Bottomless Pool",
+            "quantity": 2,
+        }
+    ]
