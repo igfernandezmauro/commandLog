@@ -192,6 +192,59 @@
       justify-content:flex-end;
     }
 
+    .addDeckDialog {
+      width: min(680px, cal(100vw - 24px));
+      max-height: 90vh;
+      overflow: auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.25);
+    }
+
+    #addDeckModal {
+      align-items: center;
+    }
+
+    .suggestions:empty {
+      display: none;
+    }
+
+    #addDeckFeaturedChoices {
+      display: grid;
+      gap: 8px;
+    }
+
+    .featuredCommanderOption {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      margin: 0;
+      padding: 10px 12px;
+
+      border: 1px solid #ddd;
+      border-radius: 10px;
+
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .featuredCommanderOption:hover {
+      background: #f6f6f6;
+    }
+
+    .featuredCommanderOption input[type="radio"] {
+      width: auto;
+      margin: 0;
+      padding: 0;
+
+      flex: 0 0 auto;
+    }
+
+    .featuredCommanderOption span {
+      flex: 1;
+    }
+
     .diffCols{
       display:grid;
       grid-template-columns:1fr 1fr;
@@ -525,6 +578,10 @@
       <span id="importRefreshStatus" class="hint"></span>
     </div>
 
+    <button id="addDeckBtn" type="button">
+      Add Deck
+    </button>
+
     <label for="deck">Deck</label>
     <div id="deckInfo" style="margin-bottom:12px;"></div>
     <select id="deck"></select>
@@ -747,14 +804,6 @@ The Ur-Dragon"></textarea>
         </div>
       </div>
 
-      <label class="toggle-row" for="enabledInput">
-        <input type="checkbox" id="enabledInput" />
-        <div>
-          <div class="toggle-title">Enable ingestion</div>
-          <div class="toggle-hint">We will periodically sync your public decks automatically.</div>
-        </div>
-      </label>
-
       <div id="profileStatus" class="status-text"></div>
     </div>
 
@@ -762,6 +811,62 @@ The Ur-Dragon"></textarea>
       <button id="profileSaveBtn" class="btn-primary" type="button">Save</button>
     </div>
   </div> 
+
+  <!-- Add Deck Modal -->
+   <div id="addDeckModal" class="modalOverlay" aria-hidden="true">
+    <div class="addDeckDialog" role="dialog" aria-modal="true" aria-labelledby="addDeckTitle">
+      <div class="modalHeader">
+        <div>
+          <div id="addDeckTitle" class="modalTitle">Add Deck</div>
+          <div class="modalSubtitle">
+            Paste a decklist to create a CommandLog deck.
+          </div>
+        </div>
+
+        <button id="addDeckCloseBtn" class="modalCloseBtn" type="button" aria-label="Close">x</button>
+      </div>
+
+      <div class="modal-body">
+        <div>
+          <label for="addDeckName">Deck name</label>
+          <input type="text" id="addDeckName" placeholder="Aristocrats" />
+        </div>
+
+        <div class="autocomplete">
+          <label for="addDeckCommander">Commander</label>
+          <input type="text" id="addDeckCommander" autocomplete="off" placeholder="Commander. User // for partners." />
+
+          <div id="addDeckCommanderSuggestions" class="suggestions"></div>
+
+          <div class="hint"> User // for partners.</div>
+        </div>
+
+        <div id="addDeckFeaturedSection" style="display:none; margin-top:14px;">
+          <div style="font-weight:700; margin-bottom:6px;">Deck image</div>
+
+          <div class="hint" style="margin-bottom:8px;">Choose which commander should provide the deck image.</div>
+
+          <div id="addDeckFeaturedChoices"></div>
+        </div>
+
+        <div>
+          <label for="addDeckDecklist">Decklist</label>
+
+          <textarea id="addDeckDecklist" rows="14" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;..." style="font-family:monospace; resize:vertical;"></textarea>
+
+          <div class="hint">One card per line, for example <code>1 Sol Ring</code>.</div>
+        </div>
+
+        <div id="addDeckStatus" class="status"></div>
+      </div>
+
+      <div class="modalFooter">
+        <button id="addDeckCancelBtn" class="secondary" type="button">Cancel</button>
+
+        <button id="addDeckSubmitBtn" type="button">Import Deck</button>
+      </div>
+    </div>
+   </div>
 
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
@@ -774,6 +879,7 @@ The Ur-Dragon"></textarea>
       let COMMANDERS = [];
       let archidektEditMode = false;
       let archidektOriginalValue = "";
+      let ADD_DECK_FEATURED_COMMANDER_ID = null;
 
       const elImportRefreshBtn = document.getElementById("importRefreshBtn");
       const elImportRefreshStatus = document.getElementById("importRefreshStatus");
@@ -800,6 +906,22 @@ The Ur-Dragon"></textarea>
       const elOpp = document.getElementById("opponents");
       const suggestionsBox = document.getElementById("commanderSuggestions");
       const nameToId = new Map();
+
+      const elAddDeckBtn = document.getElementById("addDeckBtn");
+      const elAddDeckModal = document.getElementById("addDeckModal");
+      const elAddDeckCloseBtn = document.getElementById("addDeckCloseBtn");
+      const elAddDeckCancelBtn = document.getElementById("addDeckCancelBtn");
+      const elAddDeckSubmitBtn = document.getElementById("addDeckSubmitBtn");
+
+      const elAddDeckName = document.getElementById("addDeckName");
+      const elAddDeckCommander = document.getElementById("addDeckCommander");
+      const elAddDeckCommanderSuggestions = document.getElementById("addDeckCommanderSuggestions");
+      const elAddDeckDecklist = document.getElementById("addDeckDecklist");
+      const elAddDeckStatus = document.getElementById("addDeckStatus");
+
+      const elAddDeckFeaturedSection = document.getElementById("addDeckFeaturedSection");
+      const elAddDeckFeaturedChoices = document.getElementById("addDeckFeaturedChoices");
+
 
       // Advanced fields
       const elTurns = document.getElementById("turns");
@@ -1192,30 +1314,281 @@ The Ur-Dragon"></textarea>
         textarea.setSelectionRange(newCaret, newCaret);
       }
 
-      function clearSuggesstions() {
-        suggestionsBox.innerHTML = "";
+      function clearSuggestions(box) {
+        box.innerHTML = "";
       }
 
-      function showSuggestions(results) {
-        clearSuggesstions();
+      function showCommanderSuggestions(results, input, box) {
+        clearSuggestions(box);
+
         if (!results.length) return;
 
         for (const r of results) {
           const div = document.createElement("div");
+          
           div.className = "suggestionItem";
           div.textContent = r.name;
 
           div.addEventListener("mousedown", (e) => {
             e.preventDefault();
 
-            replaceCurrentLineSegment(elOpp, r.name);
+            replaceCurrentLineSegment(input, r.name);
             nameToId.set(r.name, r.oracle_id);
 
-            clearSuggesstions();
-            elOpp.focus();
+            clearSuggestions(box);
+
+            if (input === elAddDeckCommander) {
+              updateAddDeckFeaturedChoices();
+            }
+
+            input.focus();
           });
 
-          suggestionsBox.appendChild(div);
+          box.appendChild(div);
+        }
+      }
+
+      function setupCommandeAutocomplete(input, box) {
+        input.addEventListener("input", () => {
+          const info = getCurrentLine(input);
+
+          const parts = info.line.split("//");
+          const query = (parts[parts.length - 1] || "").trim();
+
+          clearSuggestions(box);
+
+          if (!query) return;
+
+          const results = searchCards(query);
+
+          showCommanderSuggestions(results, input, box);
+        });
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key == "/" && !e.shiftKey) {
+            const text = input.value;
+            const caret = input.selectionStart;
+
+            if (caret > 0 && text[caret - 1] === "/") {
+              e.preventDefault();
+
+              const before = text.slice(0, caret - 1);
+              const after = text.slice(caret);
+
+              const insert = " // ";
+
+              input.value = before + insert + after;
+
+              const newCaret = before.length + insert.length;
+
+              input.setSelectionRange(newCaret, newCaret);
+
+              input.dispatchEvent(new Event("input"));
+            }
+          }
+        });
+      }
+
+      function findCommanderByExactName(name) {
+        const wanted = name.trim().toLowerCase();
+        
+        return COMMANDERS.find(
+          c => (c.name || "").trim().toLowerCase() === wanted
+        ) || null;
+      }
+
+      function parseAddDeckCommanders() {
+        const value = elAddDeckCommander.value.trim();
+
+        if (!value) return [];
+
+        // Try entire value first. This allows DFC commander whose canonical name contains //.
+        const whole = findCommanderByExactName(value);
+
+        if (whole) {
+          return [
+            {
+              oracle_id: whole.oracle_id,
+              name: whole.name
+            }
+          ];
+        }
+
+        // Otherwise find a // that separates two real commander names.
+        let searchFrom = 0;
+
+        while (true) {
+          const separator = value.indexOf("//", searchFrom);
+
+          if (separator === -1) break;
+
+          const leftName = value.slice(0, separator).trim();
+          const rightName = value.slice(separator + 2).trim();
+
+          const left = findCommanderByExactName(leftName);
+          const right = findCommanderByExactName(rightName);
+
+          if (left && right) {
+            return [
+              {
+                oracle_id: left.oracle_id,
+                name: left.name
+              },
+              {
+                oracle_id: right.oracle_id,
+                name: right.name
+              }
+            ];
+          }
+
+          searchFrom = separator + 2;
+        }
+
+        return [];
+      }
+
+      function updateAddDeckFeaturedChoices() {
+        const commanders = parseAddDeckCommanders();
+
+        elAddDeckFeaturedChoices.innerHTML = "";
+
+        if (commanders.length <= 1) {
+          elAddDeckFeaturedSection.style.display = "none";
+
+          ADD_DECK_FEATURED_COMMANDER_ID = commanders.length === 1 ? commanders[0].oracle_id : null;
+
+          return;
+        }
+
+        elAddDeckFeaturedSection.style.display = "block";
+
+        const validIds = new Set(commanders.map(c => c.oracle_id));
+
+        if (!ADD_DECK_FEATURED_COMMANDER_ID || !validIds.has(ADD_DECK_FEATURED_COMMANDER_ID)) {
+          ADD_DECK_FEATURED_COMMANDER_ID = commanders[0].oracle_id;
+        }
+
+        for (const commander of commanders) {
+          const label = document.createElement("label");
+          label.className = "featuredCommanderOption";
+
+          const radio = document.createElement("input");
+
+          radio.type = "radio";
+          radio.name = "addDeckFeaturedCommander";
+          radio.value = commander.oracle_id;
+
+          radio.checked = commander.oracle_id === ADD_DECK_FEATURED_COMMANDER_ID;
+
+          radio.addEventListener("change", () => {
+            ADD_DECK_FEATURED_COMMANDER_ID = commander.oracle_id;
+          });
+
+          const text = document.createElement("span");
+          text.textContent = commander.name;
+
+          label.appendChild(radio);
+          label.appendChild(text);
+
+          elAddDeckFeaturedChoices.appendChild(label);
+        }
+      }
+
+      async function submitAddDeck() {
+        const name = elAddDeckName.value.trim();
+        const decklist = elAddDeckDecklist.value.trim();
+
+        if (!name) {
+          setAddDeckStatus("Deck name is required.", false);
+          return;
+        }
+
+        if (!elAddDeckCommander.value.trim()) {
+          setAddDeckStatus("Commander is required.", false);
+          return;
+        }
+
+        if (!decklist) {
+          setAddDeckStatus("Decklist is required.", false);
+          return;
+        }
+
+        let commanders;
+
+        try {
+          commanders = parseAddDeckCommanders();
+        } catch (err) {
+          setAddDeckStatus(err.message, false);
+          return;
+        }
+
+        if (!commanders.length) {
+          setAddDeckStatus("Please select a valid commander.", false);
+          return;
+        }
+
+        if (commanders.length > 1 && !ADD_DECK_FEATURED_COMMANDER_ID) {
+          setAddDeckStatus("Please choose a commander for the deck image.", false);
+          return;
+        }
+
+        const payload = {
+          name,
+          commanders,
+          featured_commander_id: commanders.length === 1 ? commanders[0].oracle_id : ADD_DECK_FEATURED_COMMANDER_ID,
+          decklist
+        };
+
+        elAddDeckSubmitBtn.disabled = true;
+        setAddDeckStatus("Importing deck...", true);
+
+        try {
+          const res = await apiFetch(
+            `${API_BASE_URL}/decks/import/text`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(payload)
+            }
+          );
+
+          const text = await res.text();
+
+          let data = {};
+
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            data = {};
+          }
+
+          if (!res.ok) {
+            throw new Error(data.message || data.error?.message || text || `Import failed (${res.status})`);
+          }
+
+          closeAddDeckModal();
+
+          await loadDecks();
+
+          if (data.deck_id) {
+            elDeck.value = data.deck_id;
+
+            localStorage.setItem(
+              "last_deck_id",
+              data.deck_id
+            );
+
+            renderSelectedDeckInfo();
+            loadPerDeckStats().catch(() => {});
+          }
+
+          setStatus(`Imported ${data.name || name}.`, true);
+        } catch (err) {
+          setAddDeckStatus(err?.message || "Failed to import deck.", false);
+        } finally {
+          elAddDeckSubmitBtn.disabled = false;
         }
       }
 
@@ -1316,6 +1689,39 @@ The Ur-Dragon"></textarea>
         el.style.color = ok ? "#1b5e20" : "#b71c1c";
       }
 
+      function setAddDeckStatus(message, ok = true) {
+        elAddDeckStatus.textContent = message || "";
+        elAddDeckStatus.className = "status " + (ok ? "ok" : "err");
+      }
+
+      function openAddDeckModal() {
+        elAddDeckName.value = "";
+        elAddDeckCommander.value = "";
+        elAddDeckDecklist.value = "";
+        ADD_DECK_FEATURED_COMMANDER_ID = null;
+        elAddDeckFeaturedSection.style.display = "none";
+        elAddDeckFeaturedChoices.innerHTML = "";
+
+        clearSuggestions(elAddDeckCommanderSuggestions);
+        setAddDeckStatus("");
+
+        elAddDeckModal.classList.add("open");
+        elAddDeckModal.setAttribute("aria-hidden", "false");
+
+        document.body.style.overflow = "hidden";
+
+        elAddDeckName.focus();
+      }
+
+      function closeAddDeckModal() {
+        elAddDeckModal.classList.remove("open");
+        elAddDeckModal.setAttribute("aria-hidden", "true");
+
+        clearSuggestions(elAddDeckCommanderSuggestions);
+
+        document.body.style.overflow = "";
+      }
+
       async function loadProfileModal() {
         setProfileStatus("Loading...", true);
 
@@ -1338,8 +1744,6 @@ The Ur-Dragon"></textarea>
         
         archidektEditMode = false;
         archidektOriginalValue = archidektInput.value;
-
-        document.getElementById("enabledInput").checked = !!p.ingestion_enabled;
         
         setProfileStatus("Loaded", true);
       }
@@ -1365,9 +1769,6 @@ The Ur-Dragon"></textarea>
 
       async function saveProfileFromModal() {
         const archidekt_username = document.getElementById("archidektUsernameInput").value.trim();
-
-        const ingestion_enabled = document.getElementById("enabledInput").checked;
-
 
         setProfileStatus("Saving...", true);
 
@@ -1907,16 +2308,18 @@ The Ur-Dragon"></textarea>
       }
 
       async function loadCardsIndex() {
-        if (IS_LOCAL) {
-          COMMANDERS = [];
-          return;
-        }
-
         try {
-          const res = await fetch(`data/commanders_index.json?v=${Date.now()}`, {
+          const res = await fetch(`/data/commanders_index.json?v=${Date.now()}`, {
             cache: "no-store"
           });
-          COMMANDERS = await res.json();
+
+          if(!res.ok) {
+            throw new Error(`Commander index returned ${res.status}`);
+          }
+
+          const data = await res.json();
+
+          COMMANDERS = Array.isArray(data) ? data : [];
         } catch (err) {
           console.error("Failed to load commanders index:", err);
           COMMANDERS = [];
@@ -2201,9 +2604,9 @@ The Ur-Dragon"></textarea>
         if (decks.length === 0) {
           elDeck.disabled = true;
 
-          setStatus("You don't have any decks yet. Import your public Archidekt decks to get started.", true);
+          setStatus("You don't have any decks yet. Import from Archidekt or add a deck manually to get started.", true);
 
-          elImportRefreshStatus.textContent = "Import your decks to start tracking changes and games.";
+          elImportRefreshStatus.textContent = "Import from Archidekt, or use Add Deck to paste a decklist.";
 
           return;
         }
@@ -2491,52 +2894,50 @@ The Ur-Dragon"></textarea>
           closeDiffModal();
           closeImg();
         }
+        if (e.key === "Escape" && elAddDeckModal.classList.contains("open")) {
+          closeAddDeckModal();
+        }
       });
       elDiffRefresh.addEventListener("click", () => {
         if (!ACTIVE_DIFF_DECK_ID) return;
         showDeckDiff(ACTIVE_DIFF_DECK_ID, "updated");
       });
 
-      elOpp.addEventListener("input", () => {
-        const info = getCurrentLine(elOpp);
-        
-        const parts = info.line.split("//");
-        const query = (parts[parts.length - 1] || "").trim();
+      setupCommandeAutocomplete(
+        elOpp,
+        suggestionsBox
+      );
 
-        clearSuggesstions();
-        
-        if (!query) return;
-
-        const results = searchCards(query);
-
-        showSuggestions(results, elOpp);
-      })
-
-      elOpp.addEventListener("keydown", (e) => {
-        if (e.key === "/" && !e.shiftKey) {
-          const text = elOpp.value;
-          const caret = elOpp.selectionStart;
-
-          if (caret > 0 && text[caret - 1] === "/") {
-            e.preventDefault();
-
-            const before = text.slice(0, caret - 1);
-            const after = text.slice(caret);
-
-            const insert = " // ";
-            elOpp.value = before + insert + after;
-
-            const newCaret = before.length + insert.length;
-            elOpp.setSelectionRange(newCaret, newCaret);
-
-            elOpp.dispatchEvent(new Event("input"));
-          }
-        }
-      })
+      setupCommandeAutocomplete(
+        elAddDeckCommander,
+        elAddDeckCommanderSuggestions
+      );
 
       document.addEventListener("click", (e) => {
-        if (!e.target.closest(".autocomplete")) clearSuggesstions();
-      })
+        if (!e.target.closest(".autocomplete")) {
+          clearSuggestions(suggestionsBox);
+          clearSuggestions(elAddDeckCommanderSuggestions);
+        }
+      });
+
+      elAddDeckBtn.addEventListener("click", openAddDeckModal);
+      elAddDeckCloseBtn.addEventListener("click", closeAddDeckModal);
+      elAddDeckCancelBtn.addEventListener("click", closeAddDeckModal);
+
+      elAddDeckModal.addEventListener("click", (e) => {
+        if (e.target === elAddDeckModal) {
+          closeAddDeckModal();
+        }
+      });
+
+      elAddDeckSubmitBtn.addEventListener("click", async () => {
+        submitAddDeck();
+      });
+
+      elAddDeckCommander.addEventListener(
+        "input",
+        updateAddDeckFeaturedChoices
+      );
 
       document.addEventListener("click", async (e) => {
         const btn = e.target.closest(".versionLink");
@@ -2598,8 +2999,8 @@ The Ur-Dragon"></textarea>
 
       document.getElementById("tzHint").textContent = `Times shown in your device timezone: ${getDeviceTimeZone()}`;
 
+      await loadCardsIndex();
       await initApp();
-      loadCardsIndex();
       
       window.addEventListener("error", (e) => {
         const msg = `JS Error: ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`

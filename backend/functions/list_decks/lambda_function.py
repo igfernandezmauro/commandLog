@@ -4,31 +4,17 @@ from commandlog.logging import get_logger
 from commandlog.auth import get_user_key
 from commandlog.exceptions import CommandLogError
 from commandlog.responses import error_response, json_response
-from commandlog.tables import (
-    deck_state_table,
-    user_profile_table,
-)
+from commandlog.tables import deck_state_table
 
 
 logger = get_logger(__name__)
 
 tbl_state = deck_state_table()
-tbl_users = user_profile_table()
 
-def get_active_source(user_key: str) -> str:
-    response = tbl_users.get_item(
-        Key={ "user_key": user_key },
-        ConsistentRead=True
-    )
-
-    item = response.get("Item") or {}
-
-    return item.get("ingestion_source") or "moxfield"
 
 def lambda_handler(event, context):
     try:
         user_key = get_user_key(event)
-        active_source = get_active_source(user_key)
         
         items = []
         
@@ -49,7 +35,6 @@ def lambda_handler(event, context):
             )
             items.extend(response.get("Items", []))
         
-        items = [item for item in items if item.get("source") == active_source]
         
         for item in items:
             last_played_at = item.get("last_played_at")
@@ -62,8 +47,7 @@ def lambda_handler(event, context):
             extra={
                 "data": {
                     "user_key": user_key,
-                    "deck_count": len(items),
-                    "source": active_source,
+                    "deck_count": len(items)
                 }
             },
         )
