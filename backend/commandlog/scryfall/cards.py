@@ -43,7 +43,14 @@ def transform_card(card: dict[str, Any], *, refreshed_at: str) -> dict[str, Any]
     if not oracle_id:
         return None
 
-    images = image_uris(card)
+    faces = card.get("card_faces") or []
+    front = faces[0] if faces else {}
+
+    images = card.get("image_uris") or front.get("image_uris") or {}
+
+    colors = card.get("colors")
+    if colors is None:
+        colors = front.get("colors") or []
 
     return dynamodb_safe(
         {
@@ -55,7 +62,7 @@ def transform_card(card: dict[str, Any], *, refreshed_at: str) -> dict[str, Any]
             "type_line": card.get("type_line"),
             "mana_cost": card.get("mana_cost"),
             "cmc": card.get("cmc"),
-            "colors": card.get("colors") or [],
+            "colors": colors,
             "color_identity": card.get("color_identity") or [],
             "keywords": card.get("keywords") or [],
             "scryfall_updated_at": card.get("updated_at"),
